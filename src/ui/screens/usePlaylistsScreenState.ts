@@ -68,9 +68,11 @@ export function usePlaylistBrowsing(state: RemoteUiState, onAction: Action, edit
   const { current: collection, rememberOpening } = useCollectionTrail(state.libraryEntries, nested && !playlist);
   const album = nested && !playlist && nestedTitle === 'Tracks' && collection?.kind === 'album'
     ? collection.entry : null;
-  const canEditPlaylists = state.supportedFeatures.includes('playlist_edit');
+  // Creating, renaming and deleting playlists is a separate capability: the
+  // player creates one with its first track and has no rename/delete at all.
+  const canEditPlaylists = state.supportedFeatures.includes('playlist_manage');
   const canImport = state.supportedFeatures.includes('playlist_import');
-  const canEditTracks = Boolean(playlist?.writable && canEditPlaylists && state.playlistRevision);
+  const canEditTracks = Boolean(playlist?.writable && state.supportedFeatures.includes('playlist_edit') && state.playlistRevision);
   const editMode = editing && canEditTracks;
   // Swiping would fight the edit-mode drag handles and remove buttons.
   const songSwipe = useSongSwipe(onAction, state.connectionMessage, state.queueStatus, state.connectionStatus === ConnectionStatus.Connected && !editMode);

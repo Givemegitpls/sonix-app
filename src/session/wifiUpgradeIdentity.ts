@@ -1,6 +1,6 @@
 import { RemoteApi } from '../data/RemoteApi';
 
-type CatalogProbe = Pick<RemoteApi, 'catalog'>;
+type CatalogProbe = Pick<RemoteApi, 'capabilities' | 'catalogRevision'>;
 type PublicIdentity = { revision: string | null; libraryId: string };
 /** Resolves true when a read over the current (possibly Bluetooth) link may be sent now. */
 export type SourceReadGate = () => Promise<boolean>;
@@ -69,7 +69,14 @@ export function publicLibraryIdentityMatches(expected: string | null | undefined
   return Boolean(expected?.trim() && candidate?.trim() && expected === candidate);
 }
 
-/** A saved address is only a candidate; it may now belong to another player. */
+/**
+ * A saved address is only a candidate; it may now belong to another player.
+ *
+ * Both sides are asked who they are (`/api/info` on SonixLink), not for their
+ * library: the identity is the serial, the revision is the index fingerprint.
+ * Asking for a catalog page here would download a whole index over the very
+ * Bluetooth link this check exists to leave.
+ */
 export async function verifyWifiUpgradeIdentity(
   current: CatalogProbe,
   candidate: CatalogProbe & Pick<RemoteApi, 'setPin'>,
@@ -82,12 +89,13 @@ export async function verifyWifiUpgradeIdentity(
   if (!canContinue() || !(await gate())) return false;
   try {
     // A pending status poll can leave the cached public identity tied to an old library.
-    const source = await current.catalog(0, 1);
+    const source = await current.capabilities({ omitPin: true });
     if (!canContinue() || !publicLibraryIdentityMatches(source.libraryId, publicLibraryId)) return false;
     if (pin) candidate.setPin(pin);
-    const destination = await candidate.catalog(0, 1);
+    const destination = await candidate.capabilities({ omitPin: true });
     if (!canContinue() || source.libraryId !== destination.libraryId) return false;
-    onVerified?.(source.revision === destination.revision ? source.revision : null);
+    const sourceRevision = current.catalogRevision;
+    onVerified?.(sourceRevision != null && sourceRevision === candidate.catalogRevision ? sourceRevision : null);
     return true;
   } catch {
     return false;

@@ -9,7 +9,7 @@ const HOST_WITH_OPTIONAL_PORT = /^[a-zA-Z0-9][a-zA-Z0-9.-]*(:\d{1,5})?$/;
 const IPV4_WITH_OPTIONAL_PORT = /^\d+\.\d+\.\d+\.\d+(:\d+)?$/;
 const HAS_LETTER = /[a-z]/i;
 
-// The saved address is a full URL ("http://192.168.1.20:8899"), and people paste those too.
+// The saved address is a full URL ("http://192.168.1.20:7800"), and people paste those too.
 function withoutScheme(input: string): string {
   return input.trim().replace(/^https?:\/\//i, '').replace(/\/$/, '');
 }
@@ -31,11 +31,10 @@ export function playerAddressHint(
       return t('If you leave out the port, {port} is used.', { port: RemoteEndpoint.DEFAULT_PLAYER_PORT });
     case 'valid': {
       const address = withoutScheme(input);
-      const port = address.split(':')[1] ??
-        (address.toLowerCase().endsWith(RemoteEndpoint.PLAYER_DOMAIN) ? '80' : String(RemoteEndpoint.DEFAULT_PLAYER_PORT));
+      const port = address.split(':')[1] ?? String(RemoteEndpoint.DEFAULT_PLAYER_PORT);
       return t('Looks good. Port {port}.', { port });
     }
     default:
-      return t('That doesn’t look like an address. Try something like 192.168.1.20:8899.');
+      return t('That doesn’t look like an address. Try something like 192.168.1.20:7800.');
   }
 }

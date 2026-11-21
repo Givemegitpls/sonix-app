@@ -215,6 +215,19 @@ const stopWifiImport = async (deps: WifiImportCommandContext) => {
   try {
     await session.api.stopImport();
     if (!isCurrent()) return;
+    if (featureSetRef.current.has('wifi_import_manual')) {
+      // The player owns the transfer mode; there is nothing to wait for. The
+      // app's own session is still over, so report it closed to the interface.
+      setWifiImportStatus({ state: 'stopped', error: null });
+      const api = session.api;
+      await loadLibraryCategory(currentLibraryCategoryRef.current, api);
+      if (!isCurrent()) return;
+      refreshQueue(api);
+      if (featureSetRef.current.has(RemoteApi.CATALOG_SYNC_FEATURE)) {
+        startCatalogSync(api, connectionAttemptRef.current, [...featureSetRef.current]);
+      }
+      return;
+    }
     for (let poll = 0; poll < 40; poll++) {
       if (!isCurrent()) return;
       const status = await session.api.importStatus();

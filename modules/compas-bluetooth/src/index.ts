@@ -111,11 +111,13 @@ export class BluetoothTransport implements HttpTransport, ArtworkPreemptibleTran
     }
 
     try {
+      const headers = { ...(request.headers || {}) };
+      if (request.timeoutMs != null) headers['X-Compas-Timeout'] = String(request.timeoutMs);
       const result = await mod.executeRfcommRequest(
         this.deviceId,
         request.method,
         request.target,
-        request.headers || {},
+        headers,
         isArt,
         artIndex ?? null,
         request.body ? bytesToBase64(request.body) : null

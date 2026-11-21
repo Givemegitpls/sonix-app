@@ -59,11 +59,11 @@ function renderSongActions(view: SongActionView) {
 
 function renderPlaylistTrackActions(view: SongActionView) {
   const { details, commands, pending, palette, t, setConfirmingRemove } = view;
-  const { canEditPlaylistTrack, hasEarlier, hasLater, playlistName, busy } = details;
+  const { canEditPlaylistTrack, canReorderPlaylistTrack, hasEarlier, hasLater, playlistName, busy } = details;
   const { movePlaylistTrack } = commands;
   return (
     <>
-      {canEditPlaylistTrack && hasEarlier ? (
+      {canReorderPlaylistTrack && hasEarlier ? (
         <SheetActionRow
           icon="arrowUp"
           label={t('Move earlier')}
@@ -71,7 +71,7 @@ function renderPlaylistTrackActions(view: SongActionView) {
           onPress={() => movePlaylistTrack(-1)}
         />
       ) : null}
-      {canEditPlaylistTrack && hasLater ? (
+      {canReorderPlaylistTrack && hasLater ? (
         <SheetActionRow
           icon="arrowDown"
           label={t('Move later')}

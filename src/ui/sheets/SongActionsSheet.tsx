@@ -205,8 +205,10 @@ function useSongActionDetails(state: RemoteUiState, visible: boolean, pending: P
   );
   const playlistName = playlist ? playlistDisplayName(playlist.name) : '';
   const busy = pending != null;
+  const canReorderPlaylistTrack = canEditPlaylistTrack && features.includes('playlist_reorder');
 
-  return { entry, entryArtwork, hasEarlier, hasLater, uniqueEntryId, title, features, stars, rating, canEditPlaylistTrack, playlistName, busy };
+  return { entry, entryArtwork, hasEarlier, hasLater, uniqueEntryId, title, features, stars, rating,
+    canEditPlaylistTrack, canReorderPlaylistTrack, playlistName, busy };
 }
 
 type SongDetails = ReturnType<typeof useSongActionDetails>;

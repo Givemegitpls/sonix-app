@@ -134,7 +134,7 @@ const tryUpgradeToWifi = async (
     return false;
   }
   const playerKey = endpoint;
-  const candidate = new RemoteApi(createWifiTransport(endpoint, 5000));
+  const candidate = new RemoteApi(createWifiTransport(endpoint, 5000), undefined, { wifiBaseUrl: endpoint });
   const savedPin = await pinStoreRef.current.get(playerKey);
   if (!canContinue()) return false;
 

@@ -25,7 +25,7 @@ export function UpdatesCard({ playerVersion }: { playerVersion?: string | null }
       <AppText variant="caption" tone="inkMuted">{t('Firmware alerts announce releases. Installed firmware versions are not reported yet. Install firmware from the player’s Updates menu.')}</AppText>
     </View>
     <Divider />
-    <ListRow title="Compás Remote" subtitle={updates.application
+    <ListRow title="Sompas" subtitle={updates.application
       ? t(updates.application.channel === 'beta' ? 'Beta version {version} · {size}' : 'Version {version} · {size}', { version: updates.application.version, size: `${(updates.application.size! / 1048576).toFixed(1)} MB` })
       : t('Installed: {version}', { version: updates.appVersion })}
       trailing={updates.application && updates.android ? <Button label={updates.installing ? t('Preparing…') : t('Download and install')} variant="raised" size="sm" busy={updates.installing} disabled={updates.installing} onPress={() => { void updates.installApplicationUpdate(); }} /> : undefined} />

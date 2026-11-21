@@ -33,14 +33,17 @@ private val responseTimeoutExecutor = ScheduledThreadPoolExecutor(1) { task ->
 
 internal fun exchangeHttp(
     activeSocket: BluetoothSocket,
+    input: InputStream,
     request: RfcommHttpRequest,
     artwork: Boolean,
+    requestedTimeoutMs: Long?,
     onResponse: (Map<String, Any>) -> Unit,
 ) {
     val (method, target, headers, bodyBase64) = request
     // RFCOMM has no read timeout. Close the socket if the player never
     // answers so the JS connection attempt can fail instead of hanging.
-    val responseTimeoutMs = if (bodyBase64 != null) 30_000L else if (artwork) 20_000L else 5_000L
+    val responseTimeoutMs = requestedTimeoutMs
+        ?: if (bodyBase64 != null) 30_000L else if (artwork) 20_000L else 5_000L
     val responseTimeout = responseTimeoutExecutor.schedule(
         { runCatching { activeSocket.close() } },
         responseTimeoutMs,
@@ -53,13 +56,15 @@ internal fun exchangeHttp(
         val bodyLengthHeader = if (requestBody != null && headers?.keys?.none { it.equals("Content-Length", ignoreCase = true) } != false) {
             "Content-Length: ${requestBody.size}\r\n"
         } else ""
-        val wire = "$method $target HTTP/1.1\r\nHost: compas\r\n${headerEntries}${bodyLengthHeader}Connection: close\r\n\r\n"
+        // SonixLink keeps an RFCOMM link open between requests (30 s idle), and
+        // the socket is expensive to rebuild; ask it to.
+        val wire = "$method $target HTTP/1.1\r\nHost: sonixlink\r\n${headerEntries}${bodyLengthHeader}Connection: keep-alive\r\n\r\n"
         val out = activeSocket.outputStream
         out.write(wire.toByteArray(StandardCharsets.US_ASCII))
         if (requestBody != null) out.write(requestBody)
         out.flush()
 
-        val response = parseHttpResponse(activeSocket.inputStream)
+        val response = parseHttpResponse(input)
         val base64Body = Base64.encodeToString(response.body, Base64.NO_WRAP)
         onResponse(mapOf(
             "statusCode" to response.statusCode,

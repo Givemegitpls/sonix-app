@@ -41,7 +41,7 @@ export default function CrashReportRecovery() {
       <Dialog
         visible={!viewing}
         onClose={() => setReport(null)}
-        title={t('Compás Remote closed unexpectedly')}
+        title={t('Sompas closed unexpectedly')}
         message={t('A local crash report is available. Nothing is uploaded automatically.')}
         actions={
           <>

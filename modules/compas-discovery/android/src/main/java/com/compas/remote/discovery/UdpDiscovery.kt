@@ -3,21 +3,18 @@ package com.compas.remote.discovery
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.Inet4Address
-import java.net.InetAddress
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicLong
 
-private const val DEFAULT_PORT = 8899
-private const val UDP_DISCOVERY_PORT = 8899
-private const val UDP_DISCOVERY_REQUEST_SIZE = 32
-private const val UDP_DISCOVERY_WINDOW_MS = 4_000L
-private const val UDP_DISCOVERY_INTERVAL_MS = 1_000L
-private val UDP_DISCOVERY_REQUEST = ByteArray(UDP_DISCOVERY_REQUEST_SIZE).also {
-    "COMPAS_REMOTE_DISCOVER_V1".toByteArray(StandardCharsets.US_ASCII).copyInto(it)
-}
-private val UDP_DISCOVERY_REPLY = "COMPAS_REMOTE_V1 8899\n".toByteArray(StandardCharsets.US_ASCII)
+// SonixLink announces itself rather than answering: a UDP datagram to port
+// 7801 every two seconds, `SONIXLINK1 <ip> <port> <name>`
+// (send_beacon() in sonixlink.c). Nothing is sent in return; this listens.
+private const val BEACON_PORT = 7801
+private const val DEFAULT_PORT = 7800
+private const val BEACON_WINDOW_MS = 5_000L
+private const val PREFIX = "SONIXLINK1 "
 
 internal class UdpDiscovery(private val sendEvent: (String, Map<String, Any?>) -> Unit) {
     private val udpGeneration = AtomicLong(0)
@@ -29,7 +26,7 @@ internal class UdpDiscovery(private val sendEvent: (String, Map<String, Any?>) -
         stop()
         synchronized(udpLifecycleLock) {
             val generation = udpGeneration.incrementAndGet()
-            val worker = Thread({ runUdpFallback(generation, scanId) }, "compas-udp-discovery").apply {
+            val worker = Thread({ runBeaconListener(generation, scanId) }, "compas-udp-discovery").apply {
                 isDaemon = true
             }
             udpWorker = worker
@@ -37,29 +34,17 @@ internal class UdpDiscovery(private val sendEvent: (String, Map<String, Any?>) -
         }
     }
 
-    private fun runUdpFallback(generation: Long, scanId: Double) {
+    private fun runBeaconListener(generation: Long, scanId: Double) {
         val socket = openSocket(generation) ?: return
-        val deadline = android.os.SystemClock.elapsedRealtime() + UDP_DISCOVERY_WINDOW_MS
-        var nextSendAt = 0L
-        val seenHosts = HashSet<String>()
-        val responseBuffer = ByteArray(UDP_DISCOVERY_REPLY.size + 1)
+        val deadline = android.os.SystemClock.elapsedRealtime() + BEACON_WINDOW_MS
+        val seen = HashSet<String>()
+        val buffer = ByteArray(1024)
         try {
             while (udpGeneration.get() == generation && !Thread.currentThread().isInterrupted) {
-                val now = android.os.SystemClock.elapsedRealtime()
-                if (now >= deadline) break
-                if (now >= nextSendAt) {
-                    val request = DatagramPacket(
-                        UDP_DISCOVERY_REQUEST,
-                        UDP_DISCOVERY_REQUEST.size,
-                        InetAddress.getByName("255.255.255.255"),
-                        UDP_DISCOVERY_PORT,
-                    )
-                    socket.send(request)
-                    nextSendAt = now + UDP_DISCOVERY_INTERVAL_MS
-                }
-
-                socket.soTimeout = minOf(200L, deadline - android.os.SystemClock.elapsedRealtime()).toInt().coerceAtLeast(1)
-                val packet = DatagramPacket(responseBuffer, responseBuffer.size)
+                val left = deadline - android.os.SystemClock.elapsedRealtime()
+                if (left <= 0) break
+                socket.soTimeout = minOf(500L, left).toInt().coerceAtLeast(1)
+                val packet = DatagramPacket(buffer, buffer.size)
                 try {
                     socket.receive(packet)
                 } catch (_: SocketTimeoutException) {
@@ -67,26 +52,38 @@ internal class UdpDiscovery(private val sendEvent: (String, Map<String, Any?>) -
                 } catch (_: SocketException) {
                     break
                 }
-                if (packet.length != UDP_DISCOVERY_REPLY.size ||
-                    !responseBuffer.copyOfRange(0, packet.length).contentEquals(UDP_DISCOVERY_REPLY)) continue
+
                 val source = packet.address as? Inet4Address ?: continue
-                val host = source.hostAddress ?: continue
-                if (!isUsableLanIpv4(source) || !seenHosts.add(host)) continue
+                if (!isUsableLanIpv4(source)) continue
+                val text = String(packet.data, 0, packet.length, StandardCharsets.UTF_8).trim()
+                if (!text.startsWith(PREFIX)) continue
+                // "<ip> <port> <name...>": the name may contain spaces.
+                val rest = text.substring(PREFIX.length)
+                val firstSpace = rest.indexOf(' ')
+                if (firstSpace <= 0) continue
+                val host = rest.substring(0, firstSpace)
+                val afterHost = rest.substring(firstSpace + 1)
+                val secondSpace = afterHost.indexOf(' ')
+                val port = (if (secondSpace < 0) afterHost else afterHost.substring(0, secondSpace))
+                    .toIntOrNull() ?: DEFAULT_PORT
+                val name = if (secondSpace < 0) "Sonix player" else afterHost.substring(secondSpace + 1).trim()
+                    .ifEmpty { "Sonix player" }
+                if (!host.matches(Regex("^\\d{1,3}(\\.\\d{1,3}){3}$"))) continue
+                if (!seen.add(host)) continue
                 if (udpGeneration.get() != generation || Thread.currentThread().isInterrupted) break
 
-                val address = "$host:$DEFAULT_PORT"
                 sendEvent("onDeviceFound", mapOf(
                     "scanId" to scanId,
                     "id" to "udp:$host",
-                    "name" to "Compas Remote Control",
+                    "name" to name,
                     "host" to host,
-                    "port" to DEFAULT_PORT,
-                    "address" to address,
+                    "port" to port,
+                    "address" to "$host:$port",
                     "apiVersion" to "1",
                 ))
             }
         } catch (_: Exception) {
-            // UDP fallback is best-effort; DNS-SD discovery remains active.
+            // Discovery is best effort; DNS-SD remains active alongside it.
         } finally {
             socket.close()
             clearUdpWorker(generation, socket)
@@ -95,9 +92,11 @@ internal class UdpDiscovery(private val sendEvent: (String, Map<String, Any?>) -
 
     private fun openSocket(generation: Long): DatagramSocket? {
         val socket = try {
-            DatagramSocket().apply {
-                soTimeout = 200
+            DatagramSocket(null).apply {
+                reuseAddress = true
                 broadcast = true
+                bind(java.net.InetSocketAddress(BEACON_PORT))
+                soTimeout = 500
             }
         } catch (_: Exception) {
             clearUdpWorker(generation, null)

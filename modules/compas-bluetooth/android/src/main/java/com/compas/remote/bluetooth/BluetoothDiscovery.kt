@@ -194,7 +194,7 @@ internal class BluetoothDiscovery(
 
         private fun hasCachedRemoteService(device: BluetoothDevice): Boolean = runCatching {
             @Suppress("DEPRECATION")
-            device.uuids.orEmpty().any { it.uuid == COMPAS_REMOTE_UUID }
+            device.uuids.orEmpty().any { it.uuid == SONIXLINK_BT_UUID }
         }.getOrDefault(false)
 
         private fun displayName(name: String?, address: String): String? =
@@ -283,7 +283,7 @@ internal class BluetoothDiscovery(
                     @Suppress("DEPRECATION")
                     val uuids = intent.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)
                         ?.filterIsInstance<ParcelUuid>().orEmpty()
-                    val hasRemoteService = uuids.any { it.uuid == COMPAS_REMOTE_UUID }
+                    val hasRemoteService = uuids.any { it.uuid == SONIXLINK_BT_UUID }
                     Log.i("CompasBluetooth", "SDP result id=${shortId(id)} uuidCount=${uuids.size} remoteService=$hasRemoteService")
                     if (hasRemoteService) {
                         val name = candidates[id]?.second

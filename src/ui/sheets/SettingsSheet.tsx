@@ -159,8 +159,8 @@ function renderSettingsMain(props: SettingsSheetProps, view: SettingsView) {
             ? t('Player {playerVersion} · Firmware {firmwareVersion} · App {appVersion}', { playerVersion: state.playerVersion, firmwareVersion: updates.firmware.version, appVersion: updates.appVersion })
             : t('Firmware {version} · App {appVersion}', { version: updates.firmware.version, appVersion: updates.appVersion }))
           : (connected && state.playerVersion
-            ? t('Player {playerVersion} · Compás Remote {appVersion}', { playerVersion: state.playerVersion, appVersion: updates.appVersion })
-            : t('Compás Remote {version}', { version: updates.appVersion }))}
+            ? t('Player {playerVersion} · Sompas {appVersion}', { playerVersion: state.playerVersion, appVersion: updates.appVersion })
+            : t('Sompas {version}', { version: updates.appVersion }))}
           trailing={<Icon name="chevronRight" size={CHEVRON_SIZE} />} onPress={() => { onClose(); onOpenUpdates(); }} />
       </Card>
       {renderSettingsPreferences(props, view)}

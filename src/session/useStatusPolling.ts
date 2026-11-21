@@ -320,7 +320,7 @@ const recoverFromStatusLoss = (deps: PollingCommandsContext, err: any, transport
     setState((prev) => ({
       ...prev,
       connectionStatus: ConnectionStatus.Error,
-      connectionMessage: err?.message || 'Connection to Compás player was lost.',
+      connectionMessage: err?.message || 'Connection to the player was lost.',
     }));
   }
 };

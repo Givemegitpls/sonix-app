@@ -302,19 +302,13 @@ function isApplicationVersion(value: unknown, channel: ApplicationUpdateChannel)
 /** Check firmware and Android app feeds independently so either can succeed alone. */
 export async function checkReleaseUpdates(
   _installedAppVersion: string,
-  installedVersionCode = 0,
-  deviceApiLevel = 0,
-  fetchImpl?: typeof fetch,
-  applicationChannel: ApplicationUpdateChannel = 'stable',
+  _installedVersionCode = 0,
+  _deviceApiLevel = 0,
+  _fetchImpl?: typeof fetch,
+  _applicationChannel: ApplicationUpdateChannel = 'stable',
 ): Promise<{ firmware: ReleaseNotice | null; application: ReleaseNotice | null; firmwareError: boolean; applicationError: boolean }> {
-  const [firmwareResult, applicationResult] = await Promise.allSettled([
-    fetchLatestFirmwareRelease(fetchImpl),
-    fetchApplicationUpdateNotice(APPLICATION_UPDATE_CONFIG, fetchImpl, installedVersionCode, deviceApiLevel, RELEASE_CHECK_TIMEOUT_MS, applicationChannel),
-  ]);
-  return {
-    firmware: firmwareResult.status === 'fulfilled' ? firmwareResult.value : null,
-    application: applicationResult.status === 'fulfilled' ? applicationResult.value : null,
-    firmwareError: firmwareResult.status === 'rejected',
-    applicationError: applicationResult.status === 'rejected',
-  };
+  // This fork has no release feed of its own. Pointing at the upstream Compás
+  // releases would offer an APK for a different application (and a different
+  // player firmware), so the check reports nothing rather than something wrong.
+  return { firmware: null, application: null, firmwareError: false, applicationError: false };
 }

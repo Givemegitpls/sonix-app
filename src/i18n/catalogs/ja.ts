@@ -878,3 +878,19 @@ Object.assign(ja, {
   "Album Artist, then Year": "アルバムアーティスト、次に年",
   "Reversed order": "逆順",
 });
+
+Object.assign(ja, {
+  'Only Sonix players with SonixLink turned on are listed.': 'Only Sonix players with SonixLink turned on are listed.',
+  'That doesn’t look like an address. Try something like 192.168.1.20:7800.': 'That doesn’t look like an address. Try something like 192.168.1.20:7800.',
+  'Connection to the player was lost.': 'Connection to the player was lost.',
+});
+
+Object.assign(ja, {
+  'Sompas closed unexpectedly': 'Sompas closed unexpectedly',
+  'Turn Bluetooth on and allow Nearby devices for Sompas, then search again.': 'Turn Bluetooth on and allow Nearby devices for Sompas, then search again.',
+  'Player firmware {version} released': 'Player firmware {version} released',
+  'Sompas {version} available': 'Sompas {version} available',
+  'Check that Wi-Fi is on and that Sompas may use the local network, then search again.': 'Check that Wi-Fi is on and that Sompas may use the local network, then search again.',
+  'Player {playerVersion} · Sompas {appVersion}': 'Player {playerVersion} · Sompas {appVersion}',
+  'Sompas {version}': 'Sompas {version}',
+});

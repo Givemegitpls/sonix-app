@@ -80,7 +80,7 @@ const publishConnection = (deps: ConnectionSetupDependencies, status: PlaybackSt
     collectionBusy: false,
     connectionTransport: transport,
     connectionAttemptTransport: null,
-    playerName: 'Compás Player',
+    playerName: 'Sonix player',
     connectionMessage: pinNotSaved ? PIN_NOT_SAVED_MESSAGE : null,
     pinDialogVisible: false,
     pinInput: '',

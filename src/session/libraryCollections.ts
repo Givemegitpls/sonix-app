@@ -32,7 +32,7 @@ const openGroup = async (deps: LibraryCollectionsDependencies, group: LibraryGro
   if (kind === 'genre') {
     libraryContextRef.current = null;
     setState((prev) => ({ ...prev, libraryNestedTitle: 'Tracks' }));
-    await startSongPage({ genre: group.name }, {}, null, false);
+    await startSongPage({ genre: group.name }, { genre: group.name }, null, false);
     return;
   }
   await loadGroupAlbums(deps, { kind, name: group.name });

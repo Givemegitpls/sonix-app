@@ -169,7 +169,7 @@ const onWifiFound = (deps: ConnectionDiscoveryDependencies, service: DiscoveredW
         try {
           // Resolving a .local name the first time can take a couple of seconds.
           const timeoutMs = candidate === ipAddress ? 1500 : 5000;
-          const capabilities = await new RemoteApi(createWifiTransport(candidate, timeoutMs)).capabilities();
+          const capabilities = await new RemoteApi(createWifiTransport(candidate, timeoutMs), undefined, { wifiBaseUrl: candidate }).capabilities();
           if (!ownsProbe()) return;
           if (capabilities.version === 1 && capabilities.features.includes('status')) {
             reachable = candidate;
@@ -184,7 +184,7 @@ const onWifiFound = (deps: ConnectionDiscoveryDependencies, service: DiscoveredW
       setState((prev) => {
         if (generation !== discoveryGenerationRef.current || prev.screen.type !== 'Connection' ||
             prev.selectedConnectionTransport !== ConnectionTransport.Wifi) return prev;
-        const player: WifiPlayer = { id: `wifi:${reachable}`, name: service.name || 'Compás Player', address: reachable };
+        const player: WifiPlayer = { id: `wifi:${reachable}`, name: service.name || 'Sonix player', address: reachable };
         // Once the name answers, the same player's IP entry is redundant.
         const others = reachable === ipAddress ? prev.wifiPlayers : prev.wifiPlayers.filter((item) => item.address !== ipAddress);
         const updated = others.some((item) => item.address === reachable)

@@ -3,7 +3,7 @@ import { RemoteEndpoint } from '../data/RemoteEndpoint';
 
 /** Resolved advertisements supply an IP, never a URL or credentials. */
 export function discoveryEndpoint(service: DiscoveredWifiService): string | null {
-  if (String(service.apiVersion) !== '1' || service.port !== 8899 || typeof service.host !== 'string') return null;
+  if (String(service.apiVersion) !== '1' || service.port !== RemoteEndpoint.DEFAULT_PLAYER_PORT || typeof service.host !== 'string') return null;
   const host = service.host;
   const parts = host.split('.');
   if (parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255)) {
@@ -14,9 +14,9 @@ export function discoveryEndpoint(service: DiscoveredWifiService): string | null
   catch { return null; }
 }
 
-const PLAYER_HOSTNAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.compas\.local$/i;
+const PLAYER_HOSTNAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.local$/i;
 
-/** The player's advertised name, such as http://r1.compas.local, for an otherwise valid advertisement. */
+/** The player's advertised name, such as http://sonix-player.local, for an otherwise valid advertisement. */
 export function discoveryHostnameEndpoint(service: DiscoveredWifiService): string | null {
   if (!discoveryEndpoint(service) || typeof service.hostname !== 'string' || !PLAYER_HOSTNAME.test(service.hostname)) return null;
   return RemoteEndpoint.normalizeWifiAddress(service.hostname);

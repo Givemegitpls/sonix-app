@@ -1,0 +1,63 @@
+# Sompas project hints
+
+Fork of `Starnished66/compas-app` that speaks SonixLink instead of the Compás
+player API. The firmware is **not** modified; the server already exists in
+`../tempotec-v3-main-wt/sonix-player/src/system/remote/sonixlink.c`
+(see `docs/SONIXLINK.md` in this repo for the endpoint map).
+
+## Checks
+
+- `npx tsc --noEmit` — the fastest signal; the whole port is typed.
+- `npm run check:translations` — every new `t('…')` literal must also exist in
+  all 14 catalogs (`src/i18n/catalogs/*.ts`). Missing keys are added with
+  `Object.assign(<locale>, { … })` at the end of the file.
+
+## Build (verified on this machine: `assembleDebug` succeeded)
+
+- Android SDK: `~/android-sdk` (cmdline-tools, platform 37.0, build-tools 37.0.0,
+  NDK 27.1.12297006, CMake 3.22.1). AGP looks for `platforms/android-37`,
+  while sdkmanager installs `android-37.0`; a symlink `android-37 -> android-37.0`
+  is required.
+- JDK: the daemon runs on `/usr/lib/jvm/java-21-openjdk`; the Java 17
+  *toolchain* is a Temurin JDK unpacked at `/home/alex/jdk17` (the system
+  `java-17-openjdk` is a JRE). Pass
+  `-Dorg.gradle.java.installations.paths=/home/alex/jdk17`. `java` itself
+  points at 25, which AGP rejects.
+- `dl.google.com` and Maven Central cut large downloads (TLS handshake or read
+  timeout) on this network. `https://repo.huaweicloud.com/repository/maven/`
+  mirrors both and delivered the 279 MB `react-android` AAR in ~25 s; an
+  `init-fast3.gradle` init script puts it (and Google Storage / Aliyun) first.
+  A local HTTP proxy listens on `127.0.0.1:2080` (mihomo mixed port).
+- `npm ci` blocks Skia's postinstall (npm allowScripts); approve it or run
+  `npm rebuild @shopify/react-native-skia` before a native build.
+- `npx expo prebuild --platform android --no-install`, then
+  `cd android && JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleDebug`.
+
+## SonixLink quirks that cost time
+
+- Commands address tracks by **path**; the UI uses numeric catalog ids. The
+  downloaded `MEDIA_TABLE` index (`SonixIndex`) is the map.
+- `GET /api/db` is a whole SQLite file, not pages. It is downloaded into the
+  cache and opened read-only.
+- Album playback value is `album + "\u001f" + album_key` (`ALBUM_VALUE_MATCH`).
+- `GET /api/queue?from=n` may answer `pending:true` until the player's UI pump
+  publishes that window; retry, do not treat it as an error.
+- `/api/art` answers `202` while preparing and `404` when there is none.
+- Bluetooth: the player keeps the RFCOMM link (30 s idle). The app's BT
+  transport now keeps one socket and reconnects once for GETs only.
+- Transfer mode is a separate thttpd on 4399; `create` refuses an existing
+  folder, so the client probes `sonix-list` before failing.
+
+## Verified against the real card
+
+- `/mnt/sd_0/.local/library.db` (8.7 MB, 3341 tracks) has every column the port
+  uses: `rowid`, `path`, `name`, `album`, `artist`, `album_artist`, `genre`,
+  `dis_id`, `disc`, `album_key`, `ctime`. `ARTIST_LINK`/`GENRE_LINK` contain
+  only the *split* names; the fallback to `artist`/`genre` is needed.
+- The paths in the index and the Transfer CGI see the same `/mnt/sd_0/` prefix.
+- SonixLink was off on the attached player (`[wireless] sonixlink = 0` in
+  `/data/device_config.ini`), so the HTTP API has not been exercised live yet.
+- `assembleRelease` additionally needs `react-android-0.86.3-release.aar` and
+  `hermes-android-…-release.aar`; both were fetched from the Huawei mirror into
+  `android/local-repo/` (with their `.pom`/`.module`), and
+  `android/build.gradle` lists that repo before `google()`.

@@ -1,6 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 import { nativeTransferError } from './nativeTransferError';
-import { getPinSafeTransfers } from '../../modules/compas-files/src';
+import { getMultipartTransfers, getPinSafeTransfers } from '../../modules/compas-files/src';
 
 export interface NativeUploadProgress {
   sent: number;
@@ -146,4 +147,74 @@ function resolveFileSystemUpload(
 ) {
   if (!result) reject(new Error('Upload did not return a response'));
   else resolve({ status: result.status, body: result.body });
+}
+
+/**
+ * Uploads one file as `multipart/form-data`, because the player's Transfer mode
+ * answers with the firmware's own `upload.cgi`, which takes the destination in
+ * a `path` field and the file in `files[]`.
+ *
+ * The native client is preferred (it streams with OkHttp and cancels like the
+ * other transfers); the fallback is expo-file-system's own multipart task,
+ * which also streams from disk.
+ */
+export function uploadMultipartNative(
+  url: string,
+  fileUri: string,
+  fields: Record<string, string>,
+  fieldName: string,
+  fileName: string,
+  onProgress: (progress: NativeUploadProgress) => void,
+  signal?: AbortSignal,
+): Promise<NativeUploadResponse> {
+  if (signal?.aborted) return Promise.reject(new Error('Upload cancelled'));
+  const native = getMultipartTransfers();
+  if (native) {
+    return new Promise((resolve, reject) => {
+      const taskId = `multipart-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const progress = native.addListener('onUploadProgress', (event) => {
+        if (event.taskId === taskId && !signal?.aborted) onProgress({ sent: event.sent, total: event.total });
+      });
+      const cancel = () => native.cancelTransfer(taskId);
+      signal?.addEventListener('abort', cancel, { once: true });
+      native.uploadMultipartFile(taskId, url, fileUri, fields, fieldName, fileName).then(
+        (result) => resolve({ status: result.status, body: result.body }),
+        (error) => reject(signal?.aborted ? new Error('Upload cancelled') : nativeTransferError(error)),
+      ).finally(() => {
+        progress.remove();
+        signal?.removeEventListener('abort', cancel);
+      });
+    });
+  }
+  if (Platform.OS !== 'android') return Promise.reject(new Error('File transfer is an Android capability'));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (complete: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', abort);
+      complete();
+    };
+    const task = FileSystem.createUploadTask(url, fileUri, {
+      httpMethod: 'POST',
+      uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+      fieldName,
+      mimeType: 'application/octet-stream',
+      parameters: fields,
+    }, (event) => {
+      if (!settled && !signal?.aborted) {
+        onProgress({ sent: event.totalBytesSent, total: event.totalBytesExpectedToSend });
+      }
+    });
+    const abort = () => {
+      Promise.resolve()
+        .then(() => task.cancelAsync())
+        .then(() => settle(() => reject(new Error('Upload cancelled'))), () => settle(() => reject(new Error('Upload cancelled'))));
+    };
+    signal?.addEventListener('abort', abort, { once: true });
+    task.uploadAsync().then(
+      (result) => settle(() => result ? resolve({ status: result.status, body: result.body }) : reject(new Error('Upload did not return a response'))),
+      (error) => settle(() => reject(signal?.aborted ? new Error('Upload cancelled') : error)),
+    );
+  });
 }

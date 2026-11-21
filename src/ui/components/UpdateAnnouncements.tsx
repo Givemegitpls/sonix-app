@@ -13,7 +13,7 @@ export function UpdateAnnouncements({ onOpenUpdates }: { onOpenUpdates(): void }
     if (!active || !updates.unseen.length) return;
     const first = updates.unseen[0];
     updates.acknowledge(updates.unseen);
-    snackbar.show({ text: first.kind === 'firmware' ? t('Compás firmware {version} released', { version: first.version }) : t('Compás Remote {version} available', { version: first.version }),
+    snackbar.show({ text: first.kind === 'firmware' ? t('Player firmware {version} released', { version: first.version }) : t('Sompas {version} available', { version: first.version }),
       actionLabel: t('Updates'), onAction: onOpenUpdates });
   }, [active, updates, snackbar, onOpenUpdates, t]);
   return null;

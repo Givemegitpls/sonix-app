@@ -41,7 +41,7 @@ export function ManualAddressEntry({ active, address, onChangeAddress, onSubmit,
         onChangeText={onChangeAddress}
         onClear={() => onChangeAddress('')}
         invalid={invalid}
-        placeholder="192.168.1.20:8899"
+        placeholder="192.168.1.20:7800"
         accessibilityLabel={t('Player address')}
         keyboardType="url"
         autoCapitalize="none"

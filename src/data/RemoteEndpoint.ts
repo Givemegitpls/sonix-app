@@ -1,7 +1,5 @@
 export class RemoteEndpoint {
-  static readonly DEFAULT_PLAYER_PORT = 8899;
-  /** Players answer at <model>.compas.local on the default HTTP port too, e.g. http://r1.compas.local. */
-  static readonly PLAYER_DOMAIN = '.compas.local';
+  static readonly DEFAULT_PLAYER_PORT = 7800;
 
   static normalizeWifiAddress(input: string, defaultPort: number = RemoteEndpoint.DEFAULT_PLAYER_PORT): string {
     if (!Number.isInteger(defaultPort) || defaultPort < 1 || defaultPort > 65535) {
@@ -30,8 +28,6 @@ export class RemoteEndpoint {
     let port: number;
     if (url.port) {
       port = parseInt(url.port, 10);
-    } else if (url.hostname.toLowerCase().endsWith(RemoteEndpoint.PLAYER_DOMAIN)) {
-      return `http://${url.hostname.toLowerCase()}`;
     } else {
       port = defaultPort;
     }

@@ -4,7 +4,9 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import expo.modules.kotlin.Promise
+import java.io.BufferedInputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.net.SocketTimeoutException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
@@ -24,10 +26,29 @@ internal class BluetoothRfcomm(
         Thread(task, "compas-rfcomm-request").apply { isDaemon = true }
     }
 
-    private class ArtworkExchange(val index: Long?) {
+    private class ArtworkExchange(val deviceId: String, val index: Long?) {
         @Volatile var preempted = false
         @Volatile var socket: BluetoothSocket? = null
     }
+
+    /**
+     * One RFCOMM link kept open between requests. SonixLink serves the same
+     * HTTP on it as on the network and keeps it for 30 s idle, so a status poll
+     * does not reconnect every second.
+     */
+    private class Link(
+        val deviceId: String,
+        val socket: BluetoothSocket,
+        val input: BufferedInputStream,
+        val output: OutputStream,
+        var lastUsed: Long,
+    )
+
+    // Only the single executor thread uses these, apart from destroy(), which
+    // comes from the module's teardown; the lock is what keeps those two apart.
+    private val linkLock = Any()
+    private val links = HashMap<String, Link>()
+    private val LINK_IDLE_MS = 20_000L
 
     private val artworkLock = Any()
     private val activeArtworkExchanges = LinkedHashSet<ArtworkExchange>()
@@ -53,15 +74,24 @@ internal class BluetoothRfcomm(
     fun preemptArtwork(index: Double?, promise: Promise) {
         val idx = index?.toLong()
         var count = 0
+        val deviceIds = HashSet<String>()
         synchronized(artworkLock) {
             for (exchange in activeArtworkExchanges) {
                 if (idx == null || exchange.index == idx) {
                     exchange.preempted = true
-                    exchange.socket?.let { s -> runCatching { s.close() } }
+                    // Only a request that actually owns the shared link may take
+                    // it down; a queued one must not abort the command ahead of it.
+                    exchange.socket?.let { s ->
+                        deviceIds.add(exchange.deviceId)
+                        runCatching { s.close() }
+                    }
                     count++
                 }
             }
         }
+        // The link a preempted artwork read was using is now closed; drop it so
+        // the next request opens a fresh one instead of writing into a corpse.
+        deviceIds.forEach { closeLink(it) }
         promise.resolve(count)
     }
 
@@ -69,6 +99,13 @@ internal class BluetoothRfcomm(
         deviceId: String, method: String, target: String, headers: Map<String, String>?,
         isArtwork: Boolean, artworkIndex: Double?, bodyBase64: String?, promise: Promise,
     ) {
+        // Expo's AsyncFunction supports eight arguments; the per-request timeout
+        // rides in a header the player never sees instead of being a ninth.
+        val timeoutHeader = "X-Compas-Timeout"
+        val timeoutMs = headers?.entries
+            ?.firstOrNull { it.key.equals(timeoutHeader, ignoreCase = true) }
+            ?.value?.toDoubleOrNull()
+        val wireHeaders = headers?.filterKeys { !it.equals(timeoutHeader, ignoreCase = true) }
         val normalizedId = normalizeDeviceId(deviceId)
         val pending = PendingRfcommRequest(normalizedId, promise)
         pairing.noteRfcommDevice(normalizedId)
@@ -88,13 +125,14 @@ internal class BluetoothRfcomm(
         }
         val idx = artworkIndex?.toLong()
         val exchange = if (isArtwork) {
-            ArtworkExchange(idx).also { ex ->
+            ArtworkExchange(normalizedId, idx).also { ex ->
                 synchronized(artworkLock) { activeArtworkExchanges.add(ex) }
             }
         } else null
 
-        val request = RfcommHttpRequest(method, target, headers, bodyBase64)
-        val task = Runnable { runRequest(pending, deviceId, normalizedId, exchange, request) }
+        val request = RfcommHttpRequest(method, target, wireHeaders, bodyBase64)
+        val timeout = timeoutMs?.toLong()
+        val task = Runnable { runRequest(pending, deviceId, normalizedId, exchange, request, timeout) }
         try {
             rfcommRequestExecutor.execute(task)
         } catch (e: RejectedExecutionException) {
@@ -106,49 +144,28 @@ internal class BluetoothRfcomm(
 
     private fun runRequest(
         pending: PendingRfcommRequest, deviceId: String, normalizedId: String,
-        exchange: ArtworkExchange?, request: RfcommHttpRequest,
+        exchange: ArtworkExchange?, request: RfcommHttpRequest, timeoutMs: Long?,
     ) {
-        var socket: BluetoothSocket? = null
+        var attempt = 0
         try {
-            if (pending.isSettled) return
-            val adapter = bluetoothAdapter() ?: throw IOException("Bluetooth adapter not available")
-            if (!adapter.isEnabled) throw IOException("Bluetooth adapter is disabled")
-            runCatching { adapter.cancelDiscovery() }
-
-            if (exchange != null && exchange.preempted) {
-                throw IOException("Artwork request preempted by foreground command")
-            }
-
-            val device = adapter.getRemoteDevice(deviceId)
-            val candidate = synchronized(pairing.lock) {
-                if (pending.isSettled) return
-                if (isDestroyed()) throw IOException("Bluetooth module was destroyed")
-                pairing.requireBondedLocked(adapter, device, normalizedId)
-                device.createRfcommSocketToServiceRecord(COMPAS_REMOTE_UUID).also { pending.socket = it }
-            }
-            if (isDestroyed()) {
-                runCatching { candidate.close() }
-                throw IOException("Bluetooth module was destroyed")
-            }
-            if (exchange != null) {
-                synchronized(artworkLock) {
-                    if (exchange.preempted) {
-                        runCatching { candidate.close() }
-                        throw IOException("Artwork request preempted by foreground command")
+            while (true) {
+                try {
+                    sendOnce(pending, deviceId, normalizedId, exchange, request, timeoutMs)
+                    return
+                } catch (e: Exception) {
+                    closeLink(normalizedId)
+                    // A GET may be replayed once: the usual cause is a link the
+                    // player closed while it sat idle. A command must not be
+                    // sent twice, so only reads retry.
+                    if (attempt == 0 && !pending.isSettled && exchange?.preempted != true &&
+                        request.method.equals("GET", ignoreCase = true)) {
+                        attempt++
+                        continue
                     }
-                    exchange.socket = candidate
+                    rejectFailedRequest(pending, exchange, e)
+                    return
                 }
             }
-            val activeSocket = connectSocket(candidate, adapter, device, normalizedId, pending)
-            socket = activeSocket
-            pending.socket = activeSocket
-            if (exchange != null) {
-                synchronized(artworkLock) { exchange.socket = activeSocket }
-            }
-
-            exchangeHttp(activeSocket, request, exchange != null, pending::resolve)
-        } catch (e: Exception) {
-            rejectFailedRequest(pending, exchange, e)
         } finally {
             pendingRfcommRequests.remove(pending)
             pending.socket = null
@@ -158,8 +175,73 @@ internal class BluetoothRfcomm(
                     exchange.socket = null
                 }
             }
-            runCatching { socket?.close() }
         }
+    }
+
+    private fun sendOnce(
+        pending: PendingRfcommRequest, deviceId: String, normalizedId: String,
+        exchange: ArtworkExchange?, request: RfcommHttpRequest, timeoutMs: Long?,
+    ) {
+        if (pending.isSettled) return
+        val adapter = bluetoothAdapter() ?: throw IOException("Bluetooth adapter not available")
+        if (!adapter.isEnabled) throw IOException("Bluetooth adapter is disabled")
+        runCatching { adapter.cancelDiscovery() }
+        if (exchange != null && exchange.preempted) {
+            throw IOException("Artwork request preempted by foreground command")
+        }
+        if (isDestroyed()) throw IOException("Bluetooth module was destroyed")
+        val device = adapter.getRemoteDevice(deviceId)
+        val link = linkFor(device, adapter, normalizedId, pending, exchange)
+        pending.socket = link.socket
+        if (exchange != null) {
+            synchronized(artworkLock) {
+                if (exchange.preempted) {
+                    closeLink(normalizedId)
+                    throw IOException("Artwork request preempted by foreground command")
+                }
+                exchange.socket = link.socket
+            }
+        }
+        exchangeHttp(link.socket, link.input, request, exchange != null, timeoutMs, pending::resolve)
+        link.lastUsed = System.currentTimeMillis()
+    }
+
+    private fun linkFor(
+        device: BluetoothDevice, adapter: BluetoothAdapter, normalizedId: String,
+        pending: PendingRfcommRequest, exchange: ArtworkExchange?,
+    ): Link {
+        val now = System.currentTimeMillis()
+        synchronized(linkLock) {
+            val existing = links[normalizedId]
+            if (existing != null && now - existing.lastUsed < LINK_IDLE_MS) return existing
+        }
+        closeLink(normalizedId)
+        if (pending.isSettled) throw IOException("Bluetooth request was cancelled")
+        // Pairing's lock is held only while the socket object is made: the
+        // connect itself waits on another thread that takes the same lock.
+        val candidate = synchronized(pairing.lock) {
+            if (pending.isSettled) throw IOException("Bluetooth request was cancelled")
+            if (isDestroyed()) throw IOException("Bluetooth module was destroyed")
+            pairing.requireBondedLocked(adapter, device, normalizedId)
+            device.createRfcommSocketToServiceRecord(SONIXLINK_BT_UUID).also { pending.socket = it }
+        }
+        if (exchange != null) {
+            synchronized(artworkLock) { exchange.socket = candidate }
+        }
+        val connected = try {
+            connectSocket(candidate, adapter, device, normalizedId, pending)
+        } catch (e: Exception) {
+            runCatching { candidate.close() }
+            throw e
+        }
+        val link = Link(normalizedId, connected, BufferedInputStream(connected.inputStream), connected.outputStream, now)
+        synchronized(linkLock) { links[normalizedId] = link }
+        return link
+    }
+
+    private fun closeLink(deviceId: String) {
+        val link = synchronized(linkLock) { links.remove(deviceId) }
+        link?.let { runCatching { it.socket.close() } }
     }
 
     private fun rejectFailedRequest(pending: PendingRfcommRequest, exchange: ArtworkExchange?, error: Exception) {
@@ -216,6 +298,10 @@ internal class BluetoothRfcomm(
             }
             activeArtworkExchanges.clear()
         }
+        synchronized(linkLock) {
+            links.values.forEach { link -> runCatching { link.socket.close() } }
+            links.clear()
+        }
         rfcommRequestExecutor.shutdownNow()
         pendingRfcommRequests.forEach { pending ->
             pending.socket?.let { socket -> runCatching { socket.close() } }
@@ -229,7 +315,8 @@ internal class BluetoothRfcomm(
         code: String,
         message: String
     ) {
-        pendingRfcommRequests.filter { it.deviceId == deviceId }.forEach { pending ->
+        closeLink(normalizeDeviceId(deviceId))
+        pendingRfcommRequests.filter { it.deviceId == normalizeDeviceId(deviceId) }.forEach { pending ->
             pending.reject(code, message, null)
             pending.socket?.let { runCatching { it.close() } }
         }

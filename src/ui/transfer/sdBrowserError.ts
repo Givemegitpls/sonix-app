@@ -6,7 +6,7 @@ export function sdBrowserError(cause: unknown, t: (source: string) => string): s
   const error = nativeTransferError(cause);
   const failure = cause as { statusCode?: number; responseBody?: string } | null;
   if (isTransferUnavailable(cause)) return t('The player SD card is unavailable');
-  if (isConnectionError({ ...failure, message: error.message })) return t('Connection to Compás player was lost.');
+  if (isConnectionError({ ...failure, message: error.message })) return t('Connection to the player was lost.');
   if (failure?.statusCode === 404 || /folder_not_found|Remote API returned HTTP 404\b/i.test(`${error.message} ${failure?.responseBody ?? ''}`)) {
     return t('Could not read this folder.');
   }

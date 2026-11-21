@@ -70,7 +70,7 @@ export function BluetoothPlayerList({ state, onAction, connectedId, onPairAndCon
       {nothingFound && state.bluetoothScanStatus === ContentStatus.Error ? (
         <ListNotice
           title={t('Couldn’t search for players')}
-          body={t('Turn Bluetooth on and allow Nearby devices for Compás Remote, then search again.')}
+          body={t('Turn Bluetooth on and allow Nearby devices for Sompas, then search again.')}
         />
       ) : nothingFound ? (
         <ListNotice
@@ -79,7 +79,7 @@ export function BluetoothPlayerList({ state, onAction, connectedId, onPairAndCon
         />
       ) : null}
       <AppText variant="caption" tone="inkMuted" style={styles.footnote}>
-        {t('Only Compás players with remote control turned on are listed.')}
+        {t('Only Sonix players with SonixLink turned on are listed.')}
       </AppText>
     </Card>
   );

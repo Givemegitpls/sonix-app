@@ -148,7 +148,7 @@ export class SerializedHttpTransport implements HttpTransport, ArtworkPreemptibl
   private dropQueuedCurrentArtwork(): void {
     for (let i = this.pending.length - 1; i >= 0; i--) {
       const queued = this.pending[i];
-      if (queued.request.target !== CURRENT_ARTWORK_TARGET) continue;
+      if (!isCurrentArtworkRequest(queued.request.target)) continue;
       this.pending.splice(i, 1);
       queued.reject(new ArtworkRequestPreemptedException());
     }
@@ -206,12 +206,22 @@ function isCatalogArtworkRequest(target: string): boolean {
   return target === '/api/v1/catalog/art' || target.startsWith('/api/v1/catalog/art?');
 }
 
+/** An artwork read for the track playing now, as opposed to one for a list row. */
+function isCurrentArtworkRequest(target: string): boolean {
+  if (target === CURRENT_ARTWORK_TARGET) return true;
+  // SonixLink's /api/art carries the track's index as a marker when the read
+  // belongs to a list row; without it this is the now-playing picture.
+  return target.startsWith('/api/art') && !/[?&]index=/.test(target);
+}
+
 export function isOptionalArtworkRequest(target: string): boolean {
   return (
     target === '/api/v1/art' ||
     target.startsWith('/api/v1/art?') ||
     target === '/api/v1/catalog/art' ||
-    target.startsWith('/api/v1/catalog/art?')
+    target.startsWith('/api/v1/catalog/art?') ||
+    target === '/api/art' ||
+    target.startsWith('/api/art?')
   );
 }
 

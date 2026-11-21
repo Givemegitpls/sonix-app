@@ -54,6 +54,17 @@ class CompasFilesModule : Module() {
             }
         }
 
+        AsyncFunction("uploadMultipartFile") { taskId: String, url: String, fileUri: String, fields: Map<String, String>, fieldName: String, fileName: String, promise: Promise ->
+            transfers.uploadMultipart(taskId, url, fileOf(fileUri), fieldName, fileName, fields, { sent, total ->
+                sendEvent("onUploadProgress", mapOf("taskId" to taskId, "sent" to sent.toDouble(), "total" to total.toDouble()))
+            }) { result ->
+                result.fold(
+                    { (status, body) -> promise.resolve(mapOf("status" to status, "body" to body)) },
+                    { promise.reject(it as? CodedException ?: TransferException(it.message ?: "Transfer failed")) },
+                )
+            }
+        }
+
         AsyncFunction("downloadFile") { taskId: String, url: String, fileUri: String, headers: Map<String, String>, promise: Promise ->
             transfers.download(taskId, url, fileOf(fileUri), headers) { result ->
                 result.fold(

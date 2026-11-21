@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "compás",
-    "slug": "compas-remote",
-    "version": "0.5.0",
+    "name": "Sompas",
+    "slug": "sompas",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -17,8 +17,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.compas.remote",
-      "versionCode": 34
+      "package": "com.sompas.remote",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -37,7 +37,10 @@
             "compileSdkVersion": 37,
             "targetSdkVersion": 37,
             "buildToolsVersion": "37.0.0",
-            "buildArchs": ["armeabi-v7a", "arm64-v8a"]
+            "buildArchs": [
+              "armeabi-v7a",
+              "arm64-v8a"
+            ]
           }
         }
       ]

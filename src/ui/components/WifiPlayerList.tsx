@@ -85,7 +85,7 @@ function renderDiscoveryNotice(status: ContentStatus, t: ReturnType<typeof useI1
   return status === ContentStatus.Error ? (
     <ListNotice
       title={t('Couldn’t search this network')}
-      body={t('Check that Wi-Fi is on and that Compás Remote may use the local network, then search again.')}
+      body={t('Check that Wi-Fi is on and that Sompas may use the local network, then search again.')}
     />
   ) : (
     <ListNotice

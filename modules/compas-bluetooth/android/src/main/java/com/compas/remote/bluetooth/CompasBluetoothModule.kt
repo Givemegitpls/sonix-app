@@ -9,7 +9,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.util.UUID
 
-val COMPAS_REMOTE_UUID: UUID = UUID.fromString("9d2f8a7e-6b4c-4d51-8e43-38f7a2c0b719")
+val SONIXLINK_BT_UUID: UUID = UUID.fromString("8d6e3a52-4c1f-4b7e-9a2d-5f0c7e1b3a90")
 
 class CompasBluetoothModule : Module() {
     private val context: Context

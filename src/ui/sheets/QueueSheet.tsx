@@ -75,6 +75,7 @@ export function QueueSheet({ state, onAction, visible, onClose }: QueueSheetProp
     <BottomSheet visible={visible} onClose={close} onBackPress={handleBackPress} fullHeight scrollable={false}>
       {renderQueueHeader({
         onAction, playbackMode: state.playbackMode, queueCount, queueBusy, canEditQueue,
+        canClearQueue: canEditQueue && state.supportedFeatures.includes('queue_clear'),
         selectedCount: selectedIds.size, removeSelected, cancelSelection, openClear: () => setConfirmingClear(true), t,
       })}
       {renderQueueStatus({ state, onAction, progress, nowPlaying, hasRows, canEditQueue, setDismissedBulkStatus, t })}
@@ -223,6 +224,7 @@ interface QueueHeaderOptions {
   queueCount: number;
   queueBusy: boolean;
   canEditQueue: boolean;
+  canClearQueue?: boolean;
   selectedCount: number;
   removeSelected: () => void;
   cancelSelection: () => void;
@@ -230,7 +232,8 @@ interface QueueHeaderOptions {
   t: ReturnType<typeof useI18n>['t'];
 }
 
-function renderQueueHeader({ onAction, playbackMode, queueCount, queueBusy, canEditQueue, selectedCount, removeSelected, cancelSelection, openClear, t }: QueueHeaderOptions) {
+function renderQueueHeader({
+  canClearQueue = true, onAction, playbackMode, queueCount, queueBusy, canEditQueue, selectedCount, removeSelected, cancelSelection, openClear, t }: QueueHeaderOptions) {
   const shuffleOn = isShuffleMode(playbackMode);
   const repeatOn = playbackMode === PlaybackMode.RepeatAll || playbackMode === PlaybackMode.RepeatOne || playbackMode === PlaybackMode.ShuffleRepeat;
   return (
@@ -272,7 +275,7 @@ function renderQueueHeader({ onAction, playbackMode, queueCount, queueBusy, canE
           label={t('Clear')}
           variant="plain"
           accessibilityLabel={t('Clear queue')}
-          disabled={queueCount === 0 || queueBusy}
+          disabled={queueCount === 0 || queueBusy || !canClearQueue}
           onPress={openClear}
         />
       )}

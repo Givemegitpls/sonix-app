@@ -30,6 +30,14 @@ interface CompasFilesNativeModule {
   listDirectory(path: string, showHidden: boolean): Promise<LocalFileEntry[]>;
   collectFiles(paths: string[], showHidden: boolean): Promise<CollectedFile[]>;
   uploadFile(taskId: string, url: string, fileUri: string, headers: Record<string, string>): Promise<{ status: number; body: string }>;
+  uploadMultipartFile(
+    taskId: string,
+    url: string,
+    fileUri: string,
+    fields: Record<string, string>,
+    fieldName: string,
+    fileName: string,
+  ): Promise<{ status: number; body: string }>;
   downloadFile(taskId: string, url: string, fileUri: string, headers: Record<string, string>): Promise<NativeDownloadResult>;
   cancelTransfer(taskId: string): void;
   addListener(eventName: 'onUploadProgress', listener: (event: { taskId: string; sent: number; total: number }) => void): { remove(): void };
@@ -110,6 +118,12 @@ export function localFileUri(path: string): string {
 export function getPinSafeTransfers(): Pick<CompasFilesNativeModule, 'uploadFile' | 'downloadFile' | 'cancelTransfer' | 'addListener'> | null {
   const module = getNativeModule();
   return module && typeof module.uploadFile === 'function' ? module : null;
+}
+
+/** The same native transfer client, for the player's CGI `upload` (multipart). */
+export function getMultipartTransfers(): Pick<CompasFilesNativeModule, 'uploadMultipartFile' | 'cancelTransfer' | 'addListener'> | null {
+  const module = getNativeModule();
+  return module && typeof module.uploadMultipartFile === 'function' ? module : null;
 }
 
 type PinSafeDownloads = Pick<CompasFilesNativeModule, 'downloadFile'> & {

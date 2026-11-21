@@ -208,7 +208,7 @@ const connectDirect = async function (
       return rejectConnectChoice(err?.message || 'Enter a valid player address.');
     }
   }
-  const target = wifi ? { api: new RemoteApi(createWifiTransport(wifiKey)), playerKey: wifiKey }
+  const target = wifi ? { api: new RemoteApi(createWifiTransport(wifiKey), undefined, { wifiBaseUrl: wifiKey }), playerKey: wifiKey }
     : await createBluetoothTarget(stateRef, btId, cancelled, rejectConnectChoice);
   if (wifi) this.activeWifiEndpointRef.current = null;
   if (!target || cancelled() || (reconnecting && this.apiRef.current)) return false;

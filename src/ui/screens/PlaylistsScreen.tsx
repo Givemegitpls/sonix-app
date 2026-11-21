@@ -49,7 +49,7 @@ export function PlaylistsScreen({ state, onAction, contentBottomInset = Space.lg
   const drag = useDragReorder({
     itemCount: editing.tracks.length,
     rowHeight: TRACK_ROW_HEIGHT,
-    enabled: browse.editMode && !editing.edits.busy,
+    enabled: browse.editMode && !editing.edits.busy && state.supportedFeatures.includes('playlist_reorder'),
     onMove: editing.edits.move,
   });
   const navigation = usePlaylistNavigation(onAction, browse, selection);

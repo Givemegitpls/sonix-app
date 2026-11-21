@@ -181,6 +181,53 @@ class PinSafeTransfers(private val client: OkHttpClient = pinSafeClient()) {
         start(taskId, request, { response -> response.code to (response.body?.string() ?: "") }, done)
     }
 
+    /**
+     * Streams [file] as one `multipart/form-data` part, beside the text [fields].
+     * The firmware's `upload.cgi` (the player's Transfer mode) takes the
+     * destination folder as `path` and the file as `files[]`, so this is the
+     * shape it expects; the raw-body [upload] above is for players whose API
+     * takes a bare body.
+     */
+    fun uploadMultipart(
+        taskId: String, url: String, file: File, fieldName: String, fileName: String,
+        fields: Map<String, String>,
+        onProgress: (sent: Long, total: Long) -> Unit,
+        done: (Result<Pair<Int, String>>) -> Unit,
+    ) {
+        val total = file.length()
+        val fileBody = object : RequestBody() {
+            override fun contentType() = "application/octet-stream".toMediaTypeOrNull()
+            override fun contentLength() = total
+            override fun writeTo(sink: BufferedSink) {
+                var sent = 0L
+                var lastEmit = 0L
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(64 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        sink.write(buffer, 0, read)
+                        sent += read
+                        val now = System.currentTimeMillis()
+                        if (sent == total || now - lastEmit >= PROGRESS_INTERVAL_MS) {
+                            lastEmit = now
+                            onProgress(sent, total)
+                        }
+                    }
+                }
+            }
+        }
+        val multipart = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .apply {
+                fields.forEach { (name, value) -> addFormDataPart(name, value) }
+                addFormDataPart(fieldName, fileName, fileBody)
+            }
+            .build()
+        val request = Request.Builder().url(url).post(multipart).build()
+        start(taskId, request, { response -> response.code to (response.body?.string() ?: "") }, done)
+    }
+
     /** Saves a 2xx body to [file]; any other status returns its body as text and leaves [file] alone. */
     fun download(
         taskId: String, url: String, file: File, headers: Map<String, String>,

@@ -719,3 +719,19 @@ Object.assign(ru, {
   "Album Artist, then Year": "Исполнитель альбома, затем год",
   "Reversed order": "Обратный порядок",
 });
+
+Object.assign(ru, {
+  'Only Sonix players with SonixLink turned on are listed.': 'В списке отображаются только плееры Sonix с включённым SonixLink.',
+  'That doesn’t look like an address. Try something like 192.168.1.20:7800.': 'Это не похоже на адрес. Попробуйте, например, 192.168.1.20:7800.',
+  'Connection to the player was lost.': 'Соединение с плеером потеряно.',
+});
+
+Object.assign(ru, {
+  'Sompas closed unexpectedly': 'Приложение Sompas неожиданно закрылось',
+  'Turn Bluetooth on and allow Nearby devices for Sompas, then search again.': 'Включите Bluetooth и разрешите Sompas доступ к устройствам поблизости, затем повторите поиск.',
+  'Player firmware {version} released': 'Выпущена прошивка плеера {version}',
+  'Sompas {version} available': 'Доступно Sompas {version}',
+  'Check that Wi-Fi is on and that Sompas may use the local network, then search again.': 'Убедитесь, что Wi-Fi включён и Sompas разрешён доступ к локальной сети, затем повторите поиск.',
+  'Player {playerVersion} · Sompas {appVersion}': 'Плеер {playerVersion} · Sompas {appVersion}',
+  'Sompas {version}': 'Sompas {version}',
+});

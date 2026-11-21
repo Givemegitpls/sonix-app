@@ -212,4 +212,5 @@ export interface PlayContext {
   artist?: string | null;
   albumArtist?: string | null;
   album?: string | null;
+  genre?: string | null;
 }

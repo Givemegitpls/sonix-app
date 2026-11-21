@@ -11,7 +11,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-private const val SERVICE_TYPE = "_compas-remote._tcp."
+private const val SERVICE_TYPE = "_sonixlink._tcp."
 private const val RESOLVE_RETRY_DELAY_MS = 300L
 private const val RESOLVE_MAX_RETRIES = 5
 

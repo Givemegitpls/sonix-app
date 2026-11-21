@@ -70,7 +70,7 @@ async function waitForSession(transferRef: FileUploadCallbacks['transferRef'], a
   await new Promise((resolve) => setTimeout(resolve, UPLOAD_RETRY_DELAY_MS));
   while (transferRef.current.status.state !== 'ready') {
     if (signal.aborted) throw new Error('Upload cancelled');
-    if (!aliveRef.current || Date.now() > deadline) throw new Error('Connection to Compás player was lost.');
+    if (!aliveRef.current || Date.now() > deadline) throw new Error('Connection to the player was lost.');
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   if (signal.aborted) throw new Error('Upload cancelled');

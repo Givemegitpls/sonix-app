@@ -156,7 +156,7 @@ function useTransferWorkspace({ transfer, active, connected }: WorkspaceProps) {
   const aliveRef = useRef(true);
   useEffect(() => () => { aliveRef.current = false; }, []);
   const errorText = useCallback((cause: any, fallback: string) => {
-    if (isConnectionError(cause)) return t('Connection to Compás player was lost.');
+    if (isConnectionError(cause)) return t('Connection to the player was lost.');
     const message = typeof cause === 'string' ? cause : cause?.message;
     return localizedMessage(wifiImportErrorMessage(cause, message || fallback), t);
   }, [t]);
