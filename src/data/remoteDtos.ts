@@ -6,6 +6,8 @@ export interface Capabilities {
   transports: string[];
   features: string[];
   libraryId?: string | null;
+  /** The player's own name, when the protocol reports one. */
+  name?: string | null;
 }
 
 export type WifiImportState = 'stopped' | 'starting' | 'ready' | 'stopping' | 'error';

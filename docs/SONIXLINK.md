@@ -16,7 +16,11 @@ The player's API is documented in its own source:
 | UDP | passive beacons on 7801: `SONIXLINK1 <ip> <port> <name>` | request/response on 8899 |
 | Auth | none | PIN header |
 
-The Bluetooth link is kept open between requests (the player closes it after
+The app also probes every address of its own /24 for TCP/7800, because many
+access points drop the multicast and broadcast the two discovery records use.
+
+A lost Bluetooth link is reconnected and idempotent GETs are retried once; the
+link is kept open between requests (the player closes it after
 30 s idle); a lost link is reconnected and idempotent GETs are retried once.
 
 ## Endpoint map

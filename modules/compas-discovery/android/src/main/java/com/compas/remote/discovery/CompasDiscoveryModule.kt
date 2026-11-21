@@ -1,6 +1,8 @@
 package com.compas.remote.discovery
 
 import android.content.Context
+import android.net.wifi.WifiManager
+import android.util.Log
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -11,6 +13,9 @@ class CompasDiscoveryModule : Module() {
 
     private val nsd = NsdDiscovery({ context }) { event, payload -> sendEvent(event, payload) }
     private val udp = UdpDiscovery { event, payload -> sendEvent(event, payload) }
+    private val mdns = MdnsDiscovery { event, payload -> sendEvent(event, payload) }
+    private val subnet = SubnetDiscovery { event, payload -> sendEvent(event, payload) }
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     // Guarded by discoveryLifecycleLock: JS asked for discovery, and it is paused while backgrounded.
     private var requestedScanId: Double? = null
@@ -61,6 +66,9 @@ class CompasDiscoveryModule : Module() {
             pausedForBackground = false
             udp.stop()
             nsd.stop()
+            mdns.stop()
+            subnet.stop()
+            releaseMulticastLock()
         }
     }
 
@@ -70,6 +78,9 @@ class CompasDiscoveryModule : Module() {
                 pausedForBackground = true
                 udp.stop()
                 nsd.stop()
+                mdns.stop()
+                subnet.stop()
+                releaseMulticastLock()
             }
         }
     }
@@ -84,11 +95,34 @@ class CompasDiscoveryModule : Module() {
     }
 
     private fun startScan(scanId: Double) {
+        Log.i("CompasDiscovery", "scan $scanId start")
+        acquireMulticastLock()
         udp.restart(scanId)
+        mdns.start(scanId)
+        subnet.start(scanId)
         try {
             nsd.start(scanId)
         } catch (_: Exception) {
             sendEvent("onDiscoveryError", mapOf("errorCode" to -1, "phase" to "start"))
         }
+    }
+
+    /** Broadcast beacons are dropped without this on several Wi-Fi drivers. */
+    private fun acquireMulticastLock() {
+        if (multicastLock != null) return
+        try {
+            val wifi = context.applicationContext.getSystemService(WifiManager::class.java) ?: return
+            multicastLock = wifi.createMulticastLock("compas-discovery").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (_: Exception) {
+            multicastLock = null
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        multicastLock?.let { lock -> if (lock.isHeld) runCatching { lock.release() } }
+        multicastLock = null
     }
 }

@@ -165,6 +165,7 @@ const onWifiFound = (deps: ConnectionDiscoveryDependencies, service: DiscoveredW
   void (async () => {
     try {
       let reachable: string | null = null;
+      let reachableName: string | null = null;
       for (const candidate of candidates) {
         try {
           // Resolving a .local name the first time can take a couple of seconds.
@@ -173,6 +174,7 @@ const onWifiFound = (deps: ConnectionDiscoveryDependencies, service: DiscoveredW
           if (!ownsProbe()) return;
           if (capabilities.version === 1 && capabilities.features.includes('status')) {
             reachable = candidate;
+            reachableName = capabilities.name?.trim() || null;
             break;
           }
         } catch {
@@ -184,7 +186,7 @@ const onWifiFound = (deps: ConnectionDiscoveryDependencies, service: DiscoveredW
       setState((prev) => {
         if (generation !== discoveryGenerationRef.current || prev.screen.type !== 'Connection' ||
             prev.selectedConnectionTransport !== ConnectionTransport.Wifi) return prev;
-        const player: WifiPlayer = { id: `wifi:${reachable}`, name: service.name || 'Sonix player', address: reachable };
+        const player: WifiPlayer = { id: `wifi:${reachable}`, name: reachableName || service.name || 'Sonix player', address: reachable };
         // Once the name answers, the same player's IP entry is redundant.
         const others = reachable === ipAddress ? prev.wifiPlayers : prev.wifiPlayers.filter((item) => item.address !== ipAddress);
         const updated = others.some((item) => item.address === reachable)

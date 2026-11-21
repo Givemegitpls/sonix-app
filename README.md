@@ -11,7 +11,10 @@ Wi-Fi or Bluetooth RFCOMM. **No firmware change is needed or made.**
 ## What works
 
 - Connect over Wi-Fi (port 7800) or Bluetooth (SonixLink's RFCOMM profile, channel 22).
-- Discovery by mDNS `_sonixlink._tcp` and by the player's UDP beacon on port 7801.
+- Discovery by mDNS `_sonixlink._tcp`, by the player's UDP beacon on port 7801,
+  and by a unicast scan of the local /24 for TCP/7800 when the access point
+  drops multicast or broadcast traffic (which is what makes typing the IP by
+  hand work while discovery does not).
 - Playback: play/pause/next/previous, seek, volume, play mode, favourites.
 - Library: the player's own SQLite index is downloaded once (`/api/db`) and queried on the
   phone, so browsing, search, albums, artists, genres and album artists behave as they do

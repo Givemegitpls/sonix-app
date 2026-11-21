@@ -183,6 +183,7 @@ export class RemoteApi {
       transports: ['wifi', 'bluetooth'],
       features: [...SONIX_FEATURES],
       libraryId: remoteApiLibraryId(info),
+      name: info.name?.trim() || null,
     };
   }
 

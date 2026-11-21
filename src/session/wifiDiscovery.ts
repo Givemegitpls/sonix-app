@@ -10,7 +10,7 @@ export function discoveryEndpoint(service: DiscoveredWifiService): string | null
     const values = parts.map(Number);
     if (values[0] === 0 || values[0] === 127 || values[0] >= 224 || values.every((v) => v === 255)) return null;
   } else if (!/^[0-9a-fA-F:]+$/.test(host) || !host.includes(':') || host === '::' || host === '::1' || /^ff/i.test(host)) return null;
-  try { return RemoteEndpoint.normalizeWifiAddress(`${host.includes(':') ? `[${host}]` : host}:8899`); }
+  try { return RemoteEndpoint.normalizeWifiAddress(`${host.includes(':') ? `[${host}]` : host}:${RemoteEndpoint.DEFAULT_PLAYER_PORT}`); }
   catch { return null; }
 }
 

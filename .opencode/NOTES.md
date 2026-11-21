@@ -61,3 +61,22 @@ player API. The firmware is **not** modified; the server already exists in
   `hermes-android-…-release.aar`; both were fetched from the Huawei mirror into
   `android/local-repo/` (with their `.pom`/`.module`), and
   `android/build.gradle` lists that repo before `google()`.
+
+- The AP on this network does not forward the player's mDNS answers or its
+  7801 broadcast beacons (host-side raw queries heard neither while HTTP on
+  192.168.1.45:7800 worked). Discovery therefore includes a unicast /24 scan for
+  TCP/7800 (`SubnetDiscovery.kt`) and a module-level MulticastLock.
+
+## Live test (Realme RMX3357, 2026-11-22)
+
+- Discovery failed only because `wifiDiscovery.endpoint()` still appended the
+  Compás port **8899** to every advertisement; the events themselves (NSD, UDP
+  beacon and the custom mDNS parser) all arrived. Never hardcode a port twice:
+  `RemoteEndpoint.DEFAULT_PLAYER_PORT` is the single source.
+- With that fixed, WiFi discovery lists "TempoTec V3" in ~2 s, connect works,
+  and the library imports (93 albums / 3341 tracks) from the downloaded index.
+  Now playing shows FLAC 24-bit/48 kHz; queue rows first appear as file names
+  until the next queue refresh, because the queue was read before the index
+  download finished.
+- Native `Log.i("CompasDiscovery", …)` lines remain for diagnosing discovery
+  (`scan … start`, `subnet scan: N hosts`, `mdns: player at …`).
