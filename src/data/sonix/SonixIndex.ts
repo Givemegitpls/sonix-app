@@ -22,6 +22,9 @@ const INDEX_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 // is Bluetooth and the body cannot stream to a file.
 const MAX_MEMORY_INDEX_BYTES = 48 * 1024 * 1024;
 const PATH_CHUNK = 400;
+// Bumped when the mapping from MEDIA_TABLE to the app's catalog changes, so
+// existing installs re-import instead of keeping rows written by an older map.
+const INDEX_MAPPING_VERSION = 2;
 
 interface MediaRow {
   id: number;
@@ -83,6 +86,16 @@ function toSongRow(row: MediaRow): SongPathRow {
   };
 }
 
+/**
+ * A record is its name *and* whose it is: the player's `album_key` hashes the
+ * album artist (or folder), not the album title, so all albums by one artist
+ * share it. Grouping the app's catalog by the bare key would merge them; the
+ * separator is the one `ALBUM_VALUE_MATCH` expects in the firmware.
+ */
+export function albumIdentity(row: Pick<SongPathRow, 'album' | 'albumKey'>): string | null {
+  return row.albumKey ? `${row.album}\u001f${row.albumKey}` : null;
+}
+
 function toCatalogSong(row: SongPathRow, artists: string[], genres: string[] = []): CatalogSong {
   return {
     id: row.id,
@@ -95,7 +108,7 @@ function toCatalogSong(row: SongPathRow, artists: string[], genres: string[] = [
     genre: genres.length ? genres.join('; ') : row.genre,
     trackNumber: row.trackNumber,
     discNumber: row.discNumber,
-    albumKey: row.albumKey,
+    albumKey: albumIdentity(row),
     artists: artists.length ? artists : row.artist ? [row.artist] : [],
   };
 }
@@ -117,7 +130,7 @@ export class SonixIndex {
 
   /** The revision `/api/info` currently advertises, whether or not it is downloaded. */
   static revisionOf(info: SonixInfo): string {
-    return info.db_hash || `${info.db_mtime}-${info.db_size}`;
+    return `${info.db_hash || `${info.db_mtime}-${info.db_size}`}@${INDEX_MAPPING_VERSION}`;
   }
 
   static libraryIdOf(info: SonixInfo): string {
@@ -406,7 +419,8 @@ export class SonixIndex {
       const key = this.columns.has('album_key') ? 'album_key' : 'album';
       const rows = await this.query<{ name: string; count: number; idx: number; album_artist: string | null; album_key: string | null }>(
         `SELECT MAX(album) AS name, COUNT(*) AS count, MIN(rowid) AS idx,
-                MAX(album_artist) AS album_artist, ${this.columns.has('album_key') ? 'album_key' : 'NULL'} AS album_key
+                MAX(album_artist) AS album_artist,
+                ${this.columns.has('album_key') ? "MAX(album || char(31) || album_key)" : 'NULL'} AS album_key
          FROM MEDIA_TABLE WHERE ${where.join(' AND ')}
          GROUP BY album COLLATE NOCASE, ${key} ORDER BY MAX(album) COLLATE NOCASE`,
         params
@@ -454,6 +468,6 @@ export function songFromRow(row: SongPathRow): Song {
     genre: row.genre,
     trackNumber: row.trackNumber,
     discNumber: row.discNumber,
-    albumKey: row.albumKey,
+    albumKey: albumIdentity(row),
   };
 }

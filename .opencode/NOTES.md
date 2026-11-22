@@ -80,3 +80,13 @@ player API. The firmware is **not** modified; the server already exists in
   download finished.
 - Native `Log.i("CompasDiscovery", …)` lines remain for diagnosing discovery
   (`scan … start`, `subnet scan: N hosts`, `mdns: player at …`).
+
+## Album identity (2026-11-22)
+
+- `MEDIA_TABLE.album_key` hashes the **album artist** (or folder), not the album
+  title. Using it alone as the app's album key merged every album of one artist:
+  Anacondaz showed 3 rows and 139 tracks landed in one of them. Albums are now
+  keyed `album + "\u001f" + album_key` (the value `ALBUM_VALUE_MATCH` expects),
+  so Anacondaz is 20 albums / 139 tracks and the library is 607 albums.
+- The catalog revision carries `@2` (`INDEX_MAPPING_VERSION`) so existing
+  installs re-import after a mapping change instead of keeping old rows.
