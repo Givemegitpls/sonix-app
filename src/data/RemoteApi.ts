@@ -55,8 +55,8 @@ import {
 export { RemoteApiException } from './remoteApiProtocol';
 
 const ART_MAX_SIDE = 640;
-const ART_ROW_SIDE = 240;
-const ART_PENDING_TRIES = 10;
+const ART_ROW_SIDE = 160;
+const ART_PENDING_TRIES = 25;
 const ART_PENDING_DELAY_MS = 200;
 const QUEUE_PENDING_TRIES = 20;
 const QUEUE_PENDING_DELAY_MS = 250;
@@ -210,6 +210,17 @@ export class RemoteApi {
     return this.index.pathForId(index);
   }
 
+  /** Paths worth asking for this row's picture, best first. */
+  private async artPathsOf(index: number | null | undefined): Promise<string[]> {
+    if (index == null) {
+      const path = await this.currentPath();
+      return path ? [path] : [];
+    }
+    assertIntegerArgument(index, 'Index', 0);
+    if (!this.index.available) return [];
+    return this.index.artCandidatePaths(index);
+  }
+
   /** Path metadata, or nothing while the index is still being fetched. */
   private async rowsForPaths(paths: readonly string[]): Promise<Map<string, SongPathRow>> {
     if (!this.index.available || !paths.length) return new Map();
@@ -249,15 +260,32 @@ export class RemoteApi {
   }
 
   async art(index?: number | null): Promise<ArtImage | null> {
-    const path = await this.pathOf(index ?? null);
-    if (!path) return null;
-    return this.readArt(path, index ?? null);
+    const paths = await this.artPathsOf(index ?? null);
+    for (const path of paths) {
+      const art = await this.readArt(path, index ?? null);
+      if (art) {
+        if (index != null) this.index.rememberArtPath(index, path);
+        return art;
+      }
+    }
+    return null;
   }
 
   async downloadArt(fileUri: string, index?: number | null): Promise<boolean> {
-    const path = await this.pathOf(index ?? null);
-    if (!path || !isFileDownloadTransport(this.transport)) return false;
-    const target = this.artTarget(path, index ?? null);
+    if (!isFileDownloadTransport(this.transport)) return false;
+    const paths = await this.artPathsOf(index ?? null);
+    for (const path of paths) {
+      if (await this.downloadArtPath(fileUri, path, index ?? null)) {
+        if (index != null) this.index.rememberArtPath(index, path);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private async downloadArtPath(fileUri: string, path: string, index: number | null): Promise<boolean> {
+    if (!isFileDownloadTransport(this.transport)) return false;
+    const target = this.artTarget(path, index);
     for (let attempt = 0; attempt < ART_PENDING_TRIES; attempt++) {
       const response = await this.transport.download({ method: 'GET', target, headers: {}, timeoutMs: 20000 }, fileUri);
       if (response.statusCode === 404) return false;

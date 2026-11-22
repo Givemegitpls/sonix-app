@@ -324,6 +324,53 @@ export class SonixIndex {
     return rows.length ? toSongRow(rows[0]) : null;
   }
 
+  /**
+   * Paths worth asking for this row's artwork, best first: the album's tracks
+   * (an embedded picture can live in only some of them), then the artist's.
+   * The app tries each until the player has a picture.
+   */
+  private artPaths = new Map<number, string>();
+  private artCandidates = new Map<number, string[]>();
+  async artCandidatePaths(id: number, limit = 8): Promise<string[]> {
+    const known = this.artPaths.get(id);
+    if (known) return [known];
+    const cached = this.artCandidates.get(id);
+    if (cached) return cached;
+    const row = await this.rowForId(id);
+    if (!row) return [];
+    const paths: string[] = [row.path];
+    const add = (value: string | null): void => {
+      if (value && !paths.includes(value)) paths.push(value);
+    };
+    if (row.album && this.columns.has('album_key')) {
+      const rows = await this.query<{ path: string }>(
+        `SELECT path FROM MEDIA_TABLE
+         WHERE album = ?1 AND album_key = ?2 AND path IS NOT NULL AND path <> ''
+         ORDER BY rowid LIMIT ?3`,
+        [row.album, row.albumKey, Math.max(2, limit >> 1)]
+      );
+      rows.forEach((item) => add(item.path));
+    }
+    if (paths.length < limit && this.columns.has('artist') && row.artist) {
+      const rows = await this.query<{ path: string }>(
+        `SELECT path FROM MEDIA_TABLE
+         WHERE artist = ?1 AND path IS NOT NULL AND path <> ''
+         ORDER BY rowid LIMIT ?2`,
+        [row.artist, limit]
+      );
+      rows.forEach((item) => add(item.path));
+    }
+    const list = paths.slice(0, limit);
+    if (this.artCandidates.size > 2048) this.artCandidates.clear();
+    this.artCandidates.set(id, list);
+    return list;
+  }
+
+  rememberArtPath(id: number, path: string): void {
+    if (this.artPaths.size > 2048) this.artPaths.clear();
+    this.artPaths.set(id, path);
+  }
+
   async pathForId(id: number): Promise<string | null> {
     const row = await this.first<{ path: string }>(
       'SELECT path FROM MEDIA_TABLE WHERE rowid = ?1 LIMIT 1',

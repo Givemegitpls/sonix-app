@@ -90,3 +90,14 @@ player API. The firmware is **not** modified; the server already exists in
   so Anacondaz is 20 albums / 139 tracks and the library is 607 albums.
 - The catalog revision carries `@2` (`INDEX_MAPPING_VERSION`) so existing
   installs re-import after a mapping change instead of keeping old rows.
+
+## Artwork (2026-11-22)
+
+- A row's picture is requested by its catalog id; a group's id is one
+  representative track. That track often has no embedded picture even when
+  another track of the same record does, so `RemoteApi` now tries the album's
+  tracks first and the artist's after that (8 candidates) until `/api/art`
+  answers, and remembers the path that worked.
+- Store rows at 160 px (`max=160`); the player decodes faster and the photo is
+  still sharp at list size. `/api/art` answers 202 until its worker finishes,
+  so the wait is 25 × 200 ms rather than 2 s.
