@@ -1,6 +1,6 @@
 import type { SessionState } from './useSessionRefs';
 import { type ActionOf } from './remoteActionDispatch';
-import { PREF_WIFI_ADDRESS, PREF_BLUETOOTH_ID, PREF_AUTO_RECONNECT } from './sessionPreferences';
+import { PREF_WIFI_ADDRESS, PREF_BLUETOOTH_ID, PREF_BLUETOOTH_NAME, PREF_AUTO_RECONNECT } from './sessionPreferences';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { selectConnectionTransport } from './connectionTransportSelection';
 import { pairDevice as pairBtDevice } from '../../modules/compas-bluetooth/src/index';
@@ -75,8 +75,11 @@ const handleScanBluetoothPlayers = (deps: ConnectionActionsDependencies) => {
 };
 
 const handleSelectBluetoothPlayer = (deps: ConnectionActionsDependencies, action: ActionOf<'SelectBluetoothPlayer'>) => {
-  const { setState } = deps.shared;
+  const { setState, stateRef } = deps.shared;
   AsyncStorage.setItem(PREF_BLUETOOTH_ID, action.id).catch(() => {});
+  // Remembered with its name so a later search can offer the player without an inquiry.
+  const name = stateRef.current.bluetoothPlayers.find((player) => player.id === action.id)?.name;
+  if (name) AsyncStorage.setItem(PREF_BLUETOOTH_NAME, name).catch(() => {});
   setState((prev) => ({ ...prev, selectedBluetoothPlayerId: action.id }));
 };
 

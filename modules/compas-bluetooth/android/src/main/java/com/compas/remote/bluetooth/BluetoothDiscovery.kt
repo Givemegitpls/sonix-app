@@ -1,6 +1,7 @@
 package com.compas.remote.bluetooth
 
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -74,18 +75,18 @@ internal class BluetoothDiscovery(
         if (inquiry.waitingAfterDestroy) mainHandler.postDelayed(timeout, INQUIRY_WATCH_TIMEOUT_MS)
     }
 
-    fun requestDiscovery(scanId: Double, promise: Promise) {
+    fun requestDiscovery(scanId: Double, knownId: String?, knownName: String?, promise: Promise) {
         if (isDestroyed()) {
             promise.reject("BLUETOOTH_UNAVAILABLE", "Bluetooth is not available", null)
             return
         }
         discoveryTurn.request(inquiry,
-            start = { startRequestedDiscovery(scanId, promise) },
+            start = { startRequestedDiscovery(scanId, knownId, knownName, promise) },
             cancel = { promise.resolve(false) }
         )
     }
 
-    private fun startRequestedDiscovery(scanId: Double, promise: Promise) {
+    private fun startRequestedDiscovery(scanId: Double, knownId: String?, knownName: String?, promise: Promise) {
         try {
             val adapter = if (isDestroyed()) null else bluetoothAdapter()
             if (adapter == null) {
@@ -96,14 +97,14 @@ internal class BluetoothDiscovery(
             ensureInquiryReceiver()
             inquiry.recoverIfIdle(adapter.isDiscovering)
             if (!inquiry.awaitingFinish) {
-                beginDiscovery(adapter, scanId, promise)
+                beginDiscovery(adapter, scanId, knownId, knownName, promise)
                 return
             }
             val timeout = Runnable { inquiry.replacementTimedOut() }
             inquiry.queueReplacement(
                 start = {
                     mainHandler.removeCallbacks(timeout)
-                    beginDiscovery(adapter, scanId, promise)
+                    beginDiscovery(adapter, scanId, knownId, knownName, promise)
                 },
                 cancel = {
                     mainHandler.removeCallbacks(timeout)
@@ -126,7 +127,9 @@ internal class BluetoothDiscovery(
         discoveryTurn.release(inquiry)
     }
 
-    private fun beginDiscovery(adapter: BluetoothAdapter, scanId: Double, promise: Promise) {
+    private fun beginDiscovery(
+        adapter: BluetoothAdapter, scanId: Double, knownId: String?, knownName: String?, promise: Promise,
+    ) {
         if (isDestroyed()) {
             promise.resolve(false)
             return
@@ -142,6 +145,14 @@ internal class BluetoothDiscovery(
             registerDiscoveryReceiver(receiver, filter, requireNotNull(inquiryReceiverContext))
             discoveryReceiver = receiver
             adapter.bondedDevices.orEmpty().forEach { receiver.addBondedDevice(it) }
+            // The player answers page scans all the time but only answers inquiry while its
+            // Bluetooth page is open, so a remembered address is verified by SDP without waiting
+            // for it to appear in this inquiry.
+            val knownAddress = knownId?.trim()?.takeIf { it.isNotEmpty() }
+            if (knownAddress != null) {
+                val knownDevice = runCatching { adapter.getRemoteDevice(knownAddress) }.getOrNull()
+                if (knownDevice != null) receiver.addKnownDevice(knownDevice, knownName)
+            }
             val started = adapter.startDiscovery()
             if (started) {
                 inquiry.started(receiver::finishInquiry)
@@ -187,6 +198,7 @@ internal class BluetoothDiscovery(
         private val verifiedIds = LinkedHashSet<String>()
         private val sdpRequestedIds = LinkedHashSet<String>()
         private val inquirySeenIds = LinkedHashSet<String>()
+        private val knownIds = LinkedHashSet<String>()
         private var inquiryComplete = false
         private var completed = false
 
@@ -202,6 +214,20 @@ internal class BluetoothDiscovery(
 
         fun addBondedDevice(device: BluetoothDevice) {
             addCandidate(device, runCatching { device.name }.getOrNull())
+        }
+
+        // A remembered player from the last session: it is connectable and answers SDP
+        // without being discoverable, so ask it right away instead of waiting for an inquiry
+        // that may never see it.
+        fun addKnownDevice(device: BluetoothDevice, preferredName: String?) {
+            if (completed) return
+            val name = preferredName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: displayName(runCatching { device.name }.getOrNull(), device.address)
+                ?: device.address
+            candidates[device.address] = device to name
+            knownIds.add(device.address)
+            Log.i("CompasBluetooth", "Saved player seeded id=${shortId(device.address)}")
+            requestSdp(device)
         }
 
         private fun addCandidate(device: BluetoothDevice, rawName: String?, seenInInquiry: Boolean = false) {
@@ -234,10 +260,40 @@ internal class BluetoothDiscovery(
 
         private fun finish() {
             if (completed || discoveryReceiver !== this) return
+            if (verifiedIds.isEmpty()) emitPairedFallback()
             completed = true
             discoveryTimeout?.let { mainHandler.removeCallbacks(it) }
             discoveryTimeout = null
             sendEvent("onDiscoveryFinished", mapOf("scanId" to scanId))
+        }
+
+        // SDP is not proof of absence: a bonded player can answer with the UUID list Android
+        // cached when it was paired, before the player registered its profile. The protocol
+        // transport verifies the device on connect, so when nothing verified, offer the paired
+        // audio devices instead of an empty list.
+        private fun emitPairedFallback() {
+            val paired = candidates.values
+                .filter { (device, _) ->
+                    device.bondState == BluetoothDevice.BOND_BONDED &&
+                        runCatching { device.type }.getOrDefault(BluetoothDevice.DEVICE_TYPE_CLASSIC) !=
+                        BluetoothDevice.DEVICE_TYPE_LE &&
+                        runCatching {
+                            device.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.AUDIO_VIDEO
+                        }.getOrDefault(true)
+                }
+                .sortedBy { it.second.lowercase() }
+            if (paired.isEmpty()) return
+            Log.i("CompasBluetooth", "No verified player; offering ${paired.size} paired devices")
+            paired.forEach { (device, name) ->
+                sendEvent("onDeviceFound", mapOf(
+                    "scanId" to scanId,
+                    "id" to device.address,
+                    "name" to name,
+                    "paired" to true,
+                    "verified" to false,
+                    "fallback" to true
+                ))
+            }
         }
 
         fun finishInquiry() {
@@ -257,12 +313,15 @@ internal class BluetoothDiscovery(
             if (awaitingSdp.isEmpty()) {
                 finish()
             } else {
+                // A remembered address that is switched off must not hold the whole search
+                // open for the full SDP grace period: an unreachable seed is not a candidate.
+                val timeoutMs = if (awaitingSdp.all { it in knownIds }) 8_000L else 25_000L
                 val timeout = Runnable {
                     Log.w("CompasBluetooth", "Discovery SDP timeout pending=${awaitingSdp.size}")
                     finish()
                 }
                 discoveryTimeout = timeout
-                mainHandler.postDelayed(timeout, 25_000L)
+                mainHandler.postDelayed(timeout, timeoutMs)
             }
         }
 

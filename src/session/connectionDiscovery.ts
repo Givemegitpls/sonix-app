@@ -1,7 +1,9 @@
 import type { SessionState } from './useSessionRefs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ConnectionTransport, ContentStatus, WifiPlayer } from '../data/types';
 import { RemoteApi } from '../data/RemoteApi';
 import { createWifiTransport } from '../data/wifiTransport';
+import { PREF_BLUETOOTH_ID, PREF_BLUETOOTH_NAME } from './sessionPreferences';
 import { discoveryEndpoint, discoveryHostnameEndpoint } from './wifiDiscovery';
 import {
   startDiscovery as startBtDiscovery,
@@ -60,6 +62,18 @@ const stopPickerDiscovery = (deps: ConnectionDiscoveryDependencies) => {
   stopBtDiscovery().catch(() => {});
 };
 
+async function rememberedBluetoothPlayer(): Promise<{ id: string; name?: string } | undefined> {
+  try {
+    const saved = new Map(await AsyncStorage.multiGet([PREF_BLUETOOTH_ID, PREF_BLUETOOTH_NAME]));
+    const id = saved.get(PREF_BLUETOOTH_ID)?.trim();
+    if (!id) return undefined;
+    const name = saved.get(PREF_BLUETOOTH_NAME)?.trim();
+    return name ? { id, name } : { id };
+  } catch {
+    return undefined;
+  }
+}
+
 const startBluetoothDiscovery = async (deps: ConnectionDiscoveryDependencies, manual: boolean) => {
   const { setState } = deps;
   if (!ownsPicker(deps, ConnectionTransport.Bluetooth)) return;
@@ -82,7 +96,9 @@ const startBluetoothDiscovery = async (deps: ConnectionDiscoveryDependencies, ma
 
   setState((prev) => ({ ...prev, bluetoothPlayers: [], bluetoothScanStatus: ContentStatus.Loading }));
   try {
-    const started = await startBtDiscovery(generation);
+    // The player answers inquiry only while its Bluetooth page is open; a player seen
+    // before is verified by SDP instead, so a repeated search does not depend on that page.
+    const started = await startBtDiscovery(generation, await rememberedBluetoothPlayer());
     if (!ownsScan()) return;
     if (!started) {
       setState((prev) => ({ ...prev, bluetoothScanStatus: ContentStatus.Empty }));

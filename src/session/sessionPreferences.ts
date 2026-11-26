@@ -14,5 +14,6 @@ export function themeFromPreference(saved: string | null): RemoteTheme {
 }
 export const PREF_WIFI_ADDRESS = 'compas_pref_wifi_address';
 export const PREF_BLUETOOTH_ID = 'compas_pref_bt_id';
+export const PREF_BLUETOOTH_NAME = 'compas_pref_bt_name';
 export const PREF_LAST_TRANSPORT = 'compas_pref_last_transport';
 export const PREF_AUTO_RECONNECT = 'compas_pref_auto_reconnect';

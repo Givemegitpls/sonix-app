@@ -26,7 +26,8 @@ function useBluetoothDiscoveryEvents({
   useEffect(() => {
     const dSub = addBtDeviceFoundListener((evt) => {
       if (evt.scanId !== discoveryGenerationRef.current || !ownsPicker(ConnectionTransport.Bluetooth)) return;
-      if (evt.verified !== true || !evt.name?.trim() || evt.name.trim().toLowerCase() === evt.id.toLowerCase()) return;
+      if ((evt.verified !== true && evt.fallback !== true) || !evt.name?.trim() ||
+          evt.name.trim().toLowerCase() === evt.id.toLowerCase()) return;
       setState((prev) => {
         const existing = prev.bluetoothPlayers.find((p) => p.id === evt.id);
         if (existing) {

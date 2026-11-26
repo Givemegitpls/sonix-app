@@ -11,6 +11,10 @@ import java.util.UUID
 
 val SONIXLINK_BT_UUID: UUID = UUID.fromString("8d6e3a52-4c1f-4b7e-9a2d-5f0c7e1b3a90")
 
+// The protocol fixes the RFCOMM channel; the reference client falls back to it when the
+// phone's cached SDP list has no SonixLink record to resolve the UUID against.
+internal const val SONIXLINK_BT_CHANNEL = 22
+
 class CompasBluetoothModule : Module() {
     private val context: Context
         get() = appContext.reactContext ?: throw IllegalStateException("React context is unavailable")
@@ -41,8 +45,8 @@ class CompasBluetoothModule : Module() {
             getBondedDevices(promise)
         }
 
-        AsyncFunction("startDiscovery") { scanId: Double, promise: Promise ->
-            discovery.requestDiscovery(scanId, promise)
+        AsyncFunction("startDiscovery") { scanId: Double, knownId: String?, knownName: String?, promise: Promise ->
+            discovery.requestDiscovery(scanId, knownId, knownName, promise)
         }.runOnQueue(Queues.MAIN)
 
         AsyncFunction("stopDiscovery") { promise: Promise ->

@@ -75,7 +75,7 @@ export function BluetoothPlayerList({ state, onAction, connectedId, onPairAndCon
       ) : nothingFound ? (
         <ListNotice
           title={t('No players found')}
-          body={t('Turn on remote control on the player, then search again. If it still doesn’t appear, pair it in Android Settings.')}
+          body={t('Open Settings → Bluetooth on the player: it is visible only while that page is open, so keep it open and search again.')}
         />
       ) : null}
       <AppText variant="caption" tone="inkMuted" style={styles.footnote}>

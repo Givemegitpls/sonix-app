@@ -894,3 +894,8 @@ Object.assign(vi, {
   'Player {playerVersion} · Sompas {appVersion}': 'Player {playerVersion} · Sompas {appVersion}',
   'Sompas {version}': 'Sompas {version}',
 });
+
+Object.assign(vi, {
+  'Open Settings → Bluetooth on the player: it is visible only while that page is open, so keep it open and search again.':
+    'Mở Cài đặt → Bluetooth trên máy phát: máy chỉ hiển thị khi trang đó đang mở. Hãy để trang mở và tìm lại.',
+});

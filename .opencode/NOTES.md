@@ -67,6 +67,44 @@ player API. The firmware is **not** modified; the server already exists in
   192.168.1.45:7800 worked). Discovery therefore includes a unicast /24 scan for
   TCP/7800 (`SubnetDiscovery.kt`) and a module-level MulticastLock.
 
+## Bluetooth discovery (2026-11-26)
+
+- The player is **inquiry-scannable only while its Bluetooth settings (or receiver)
+  page is open**: `hciconfig hci0` shows `PSCAN` alone normally and `PSCAN ISCAN` with
+  the page open, and bluez `Discoverable` in
+  `/usr/var/lib/bluetooth/00:02:5B:00:A5:A5/settings` follows the same page
+  (`btsettings.c:728/740`, `btreceiverpage.c:260/279`). `adb shell hciconfig hci0
+  iscan|piscan|pscan` emulates it; use `piscan`, not `iscan` (it drops page scan,
+  so SDP then fails).
+- **The SDP UUID list of a bonded device is not trustworthy.** After pairing, the
+  phone answers `ACTION_UUID` for `00:02:5B:00:A5:A5` with 3 UUIDs and no SonixLink
+  (`remoteService=false`) although the player's own `sdptool browse local` lists the
+  record; Android keeps the list cached from the moment of pairing (the player
+  registers the profile late). Filtering discovery by that UUID alone hides the player
+  forever.
+- The reference client `com.mattiadoronzo.sonixlink` does not filter at all:
+  `ConnectActivity.pickBluetooth()` takes `getBondedDevices()` and shows them, and
+  `BluetoothTransport.open()` tries `createRfcommSocketToServiceRecord(UUID)` and, on
+  failure, reflectively `createRfcommSocket(22)` (`CHANNEL = 22`, then
+  `fetchUuidsWithSdp()` to refresh the cache). Its `Discovery` class is network-only
+  (mDNS `_sonixlink._tcp.` + UDP 7801).
+- Our app now mirrors both: `startDiscovery` seeds the remembered address
+  (`PREF_BLUETOOTH_ID`/`PREF_BLUETOOTH_NAME`) and verifies it with SDP; when SDP
+  verifies nothing, `emitPairedFallback()` offers bonded, non-LE, Audio/Video-class
+  devices with `fallback: true`, and the JS listener accepts `verified || fallback`.
+  `BluetoothRfcomm` falls back to channel 22 when the UUID socket fails (not yet
+  exercised live — the successful connection used the UUID socket).
+- Pairing needs only page scan, so it works once the address is known. The empty-state
+  text tells the user to keep the player's Bluetooth page open for a cold search.
+- Driving the phone: taps on the Connect screen are ignored while the app is
+  auto-reconnecting, and the layout jumps by ~560 px each time the "CONNECTION FAILED"
+  card appears/disappears. Re-dump `uiautomator` bounds immediately before every tap,
+  and do not trust coordinates from an older dump.
+- Release build + install (keeps data: release is signed with the debug keystore):
+  `cd android && ANDROID_HOME=/home/alex/android-sdk JAVA_HOME=/usr/lib/jvm/java-21-openjdk ./gradlew assembleRelease -Dorg.gradle.java.installations.paths=/home/alex/jdk17 --init-script init-fast3.gradle`,
+  then `adb install -r android/app/build/outputs/apk/release/app-release.apk`. A warm
+  daemon builds in 10-35 s.
+
 ## Live test (Realme RMX3357, 2026-11-22)
 
 - Discovery failed only because `wifiDiscovery.endpoint()` still appended the

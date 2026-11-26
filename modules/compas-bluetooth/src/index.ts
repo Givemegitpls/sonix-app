@@ -19,6 +19,8 @@ export interface BluetoothDeviceFoundEvent extends BluetoothDiscoveryEvent {
   name: string;
   paired: boolean;
   verified: boolean;
+  /** A paired device offered when SDP verified nothing (the cached UUID list can be stale). */
+  fallback?: boolean;
 }
 
 export interface BluetoothBondStateChangedEvent {
@@ -54,10 +56,18 @@ export async function getBondedDevices(): Promise<DiscoveredBluetoothDevice[]> {
   return await mod.getBondedDevices();
 }
 
-export async function startDiscovery(scanId: number): Promise<boolean> {
+export interface RememberedBluetoothPlayer {
+  id: string;
+  name?: string;
+}
+
+export async function startDiscovery(
+  scanId: number,
+  remembered?: RememberedBluetoothPlayer | null,
+): Promise<boolean> {
   const mod = getNativeModule();
   if (!mod || !mod.startDiscovery) return false;
-  return await mod.startDiscovery(scanId);
+  return await mod.startDiscovery(scanId, remembered?.id ?? null, remembered?.name ?? null);
 }
 
 export async function stopDiscovery(): Promise<boolean> {

@@ -3,6 +3,7 @@ package com.compas.remote.bluetooth
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.util.Log
 import expo.modules.kotlin.Promise
 import java.io.BufferedInputStream
 import java.io.IOException
@@ -266,14 +267,36 @@ internal class BluetoothRfcomm(
             Thread(connectTask, "compas-rfcomm-connect").apply { isDaemon = true }
         }
         try {
-            val connecting = connectExecutor.submit {
+            val connecting = connectExecutor.submit<BluetoothSocket> {
                 synchronized(pairing.lock) {
                     if (pending.isSettled) throw IOException("Bluetooth request was cancelled")
                     pairing.requireBondedLocked(adapter, device, normalizedId)
                 }
-                candidate.connect()
+                try {
+                    candidate.connect()
+                    candidate
+                } catch (first: Exception) {
+                    runCatching { candidate.close() }
+                    // The player registers SonixLink late and Android keeps the UUID list it
+                    // cached at pairing time, so resolving the service can fail on a player that
+                    // is bonded and reachable. The channel is fixed by the protocol: open it
+                    // directly, then refresh the cached list for the next request.
+                    val channel = channelSocket(device)
+                        ?: throw IOException(first.message ?: "RFCOMM connect failed", first)
+                    Log.i("CompasBluetooth", "UUID socket failed (${first.message}); opening channel $SONIXLINK_BT_CHANNEL")
+                    pending.socket = channel
+                    try {
+                        channel.connect()
+                        Log.i("CompasBluetooth", "channel $SONIXLINK_BT_CHANNEL accepted")
+                        runCatching { device.fetchUuidsWithSdp() }
+                        channel
+                    } catch (second: Exception) {
+                        runCatching { channel.close() }
+                        throw IOException("${first.message} / ${second.message}", second)
+                    }
+                }
             }
-            try {
+            return try {
                 connecting.get(15_000, TimeUnit.MILLISECONDS)
             } catch (timeout: TimeoutException) {
                 connecting.cancel(true)
@@ -281,7 +304,6 @@ internal class BluetoothRfcomm(
                     initCause(timeout)
                 }
             }
-            return candidate
         } catch (e: Exception) {
             runCatching { candidate.close() }
             throw ((e as? ExecutionException)?.cause ?: e)
@@ -289,6 +311,13 @@ internal class BluetoothRfcomm(
             connectExecutor.shutdownNow()
         }
     }
+
+    // BluetoothDevice.createRfcommSocket(int) is hidden but callable, and the reference client
+    // relies on exactly this when the UUID lookup fails.
+    private fun channelSocket(device: BluetoothDevice): BluetoothSocket? = runCatching {
+        val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+        method.invoke(device, SONIXLINK_BT_CHANNEL) as BluetoothSocket
+    }.getOrNull()
 
     fun destroy() {
         synchronized(artworkLock) {

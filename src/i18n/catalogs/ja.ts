@@ -894,3 +894,8 @@ Object.assign(ja, {
   'Player {playerVersion} · Sompas {appVersion}': 'Player {playerVersion} · Sompas {appVersion}',
   'Sompas {version}': 'Sompas {version}',
 });
+
+Object.assign(ja, {
+  'Open Settings → Bluetooth on the player: it is visible only while that page is open, so keep it open and search again.':
+    'プレーヤーで設定 → Bluetooth を開いてください。この画面を開いている間だけ表示されるので、開いたまま再検索してください。',
+});

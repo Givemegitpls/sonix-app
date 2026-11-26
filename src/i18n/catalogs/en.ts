@@ -253,3 +253,8 @@ Object.assign(en, {
   "Album Artist, then Year": "Album Artist, then Year",
   "Reversed order": "Reversed order",
 });
+
+Object.assign(en, {
+  "Open Settings → Bluetooth on the player: it is visible only while that page is open, so keep it open and search again.":
+    "Open Settings → Bluetooth on the player: it is visible only while that page is open, so keep it open and search again.",
+});

@@ -894,3 +894,8 @@ Object.assign(zh_CN, {
   'Player {playerVersion} · Sompas {appVersion}': 'Player {playerVersion} · Sompas {appVersion}',
   'Sompas {version}': 'Sompas {version}',
 });
+
+Object.assign(zh_CN, {
+  'Open Settings → Bluetooth on the player: it is visible only while that page is open, so keep it open and search again.':
+    '请在播放器上打开“设置 → 蓝牙”：该页面打开时播放器才可见，请保持打开后重新搜索。',
+});
