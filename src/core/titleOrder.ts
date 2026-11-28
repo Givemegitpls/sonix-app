@@ -30,6 +30,34 @@ function withoutLeadingIgnorable(title: string): string {
   return start ? title.slice(start) : title;
 }
 
+export const NON_LETTER_KEY = '#';
+/** Symbols and scripts without letter case (CJK, Arabic, Hebrew…) share one section after Z. */
+export const OTHER_SCRIPT_KEY = '…';
+
+// Latin letters whose decomposition is not a base letter plus accents.
+const LATIN_LETTERS: Record<string, string> = {
+  Æ: 'A', æ: 'A', Œ: 'O', œ: 'O', ß: 'S', ẞ: 'S', Þ: 'T', þ: 'T', Ð: 'D', ð: 'D', Đ: 'D', đ: 'D',
+  Ø: 'O', ø: 'O', Ł: 'L', ł: 'L', Ħ: 'H', ħ: 'H', Ŧ: 'T', ŧ: 'T', Ŀ: 'L', ŀ: 'L', ı: 'I', Ĳ: 'I', ĳ: 'I',
+};
+
+/** The section a title is filed under; sections follow the same collation as `titleSortKey`. */
+export function titleLetter(title: string): string {
+  let first = '';
+  for (const char of title.normalize('NFD')) {
+    const code = char.codePointAt(0)!;
+    if (code >= 0x0300 && code <= 0x036f) continue;
+    if (isIgnorableLeading(code)) continue;
+    first = char;
+    break;
+  }
+  // Digits sort before A on the player; everything that is not Latin sorts after Z.
+  if (!first || /[0-9]/.test(first)) return NON_LETTER_KEY;
+  if (/[a-z]/i.test(first)) return first.toUpperCase();
+  if (LATIN_LETTERS[first]) return LATIN_LETTERS[first];
+  const upper = first.toUpperCase();
+  return upper !== first.toLowerCase() ? upper : OTHER_SCRIPT_KEY;
+}
+
 export function titleSortKey(title: string): string {
   const lower = withoutLeadingIgnorable(title).toLowerCase();
   if (!NON_ASCII.test(lower)) return lower;

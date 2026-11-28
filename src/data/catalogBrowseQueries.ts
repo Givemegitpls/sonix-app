@@ -1,4 +1,5 @@
 import type { SqlDatabase } from './catalogDatabase';
+import { titleLetter } from '../core/titleOrder';
 import type { CatalogSong } from './types';
 
 export interface CatalogPageSlice {
@@ -12,6 +13,11 @@ export interface CatalogGroup {
   index: number;
   albumArtist: string;
   albumKey?: string | null;
+}
+
+export interface CatalogLetterSection {
+  letter: string;
+  position: number;
 }
 
 export enum CatalogGroupKind {
@@ -74,6 +80,8 @@ export class CatalogBrowseQueries {
   // Filtered song totals per library/revision/filter; a published revision's rows never change.
   private songCounts = new Map<string, number>();
   private songCountGeneration = 0;
+  // Section letters of the ordered song list, one walk per revision.
+  private letterSections = new Map<string, CatalogLetterSection[]>();
 
   constructor(private readonly database: () => Promise<SqlDatabase>) {}
 
@@ -86,8 +94,38 @@ export class CatalogBrowseQueries {
     return row ? Number(row.count || 0) : 0;
   }
 
-  async albumKeysForSongs(libraryId: string, revision: string, songIds: number[]): Promise<Map<number, string>> {
-    if (!songIds.length) return new Map();
+  /**
+   * The letter sections of the whole ordered song list, with the index of each
+   * section's first song. Titles are ordered by `title_key`, so walking the rows
+   * gives the same sections the Songs list shows as its letter headers.
+   */
+  async songLetterSections(libraryId: string, revision: string): Promise<CatalogLetterSection[]> {
+    const key = `${libraryId}\u0000${revision}`;
+    const cached = this.letterSections.get(key);
+    if (cached) return cached;
+    const db = await this.database();
+    const rows = await db.query<{ title: string }>(
+      `SELECT title FROM catalog_songs
+       WHERE library_id = ? AND revision = ?
+       ORDER BY title_key, catalog_rank`,
+      [libraryId, revision]
+    );
+    const sections: CatalogLetterSection[] = [];
+    let previous: string | null = null;
+    rows.forEach((row, position) => {
+      const letter = titleLetter(String(row.title || ''));
+      if (letter === previous) return;
+      sections.push({ letter, position });
+      previous = letter;
+    });
+    if (this.letterSections.size >= SONG_COUNT_CACHE_LIMIT) {
+      this.letterSections.delete(this.letterSections.keys().next().value as string);
+    }
+    this.letterSections.set(key, sections);
+    return sections;
+  }
+
+  async albumKeysForSongs(libraryId: string, revision: string, songIds: number[]): Promise<Map<number, string>> {    if (!songIds.length) return new Map();
     const db = await this.database();
     const rows = await db.query<{ song_id: number; album_key: string }>(
       `SELECT id AS song_id, album_key FROM catalog_songs
@@ -118,7 +156,9 @@ export class CatalogBrowseQueries {
       albumKey != null || album != null
         ? `CASE WHEN disc_number IS NULL THEN 1 ELSE 0 END, disc_number,
            CASE WHEN track_number IS NULL THEN 1 ELSE 0 END, track_number, catalog_rank`
-        : 'catalog_rank';
+        // A flat song list (Songs, search, genre tracks) is alphabetical by title, as the
+        // player's own browse lists are; the scan order would group every artist together.
+        : 'title_key, catalog_rank';
 
     // Paging re-reads the same filter repeatedly; count it once per revision instead of on every page.
     const countKey = `${libraryId}\u0000${revision}\u0000${JSON.stringify([where, args.slice(2)])}`;
@@ -334,6 +374,10 @@ export class CatalogBrowseQueries {
     const prefix = revision != null ? `${libraryId}\u0000${revision}\u0000` : `${libraryId}\u0000`;
     for (const key of Array.from(this.songCounts.keys())) {
       if (key.startsWith(prefix)) this.songCounts.delete(key);
+    }
+    const letterPrefix = revision != null ? `${libraryId}\u0000${revision}` : `${libraryId}\u0000`;
+    for (const key of Array.from(this.letterSections.keys())) {
+      if (key.startsWith(letterPrefix)) this.letterSections.delete(key);
     }
   }
 }

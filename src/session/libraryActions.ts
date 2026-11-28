@@ -19,6 +19,7 @@ interface LibraryActionsDependencies extends
   librarySource: (catalog?: CatalogIdentity | null) => string;
   loadLibraryArtwork: (id: string) => Promise<void>;
   loadMoreLibrary: () => Promise<void>;
+  revealLibraryLetter: (position: number) => Promise<void>;
   playNativeCollection: (shuffle: boolean) => Promise<void>;
   selectLibraryEntry: (id: string) => Promise<void>;
   startCatalogSync: (api: RemoteApi, attempt: number, features: string[], refreshCoversManifest?: boolean) => Promise<void>;
@@ -97,6 +98,10 @@ const handleLoadLibraryArtwork = (deps: LibraryActionsDependencies, action: Acti
   loadLibraryArtwork(action.entryId);
 };
 
+const handleRevealLibraryLetter = (deps: LibraryActionsDependencies, action: ActionOf<'RevealLibraryLetter'>) => {
+  void deps.revealLibraryLetter(action.position);
+};
+
 export function createLibraryActions(deps: LibraryActionsDependencies) {
   return {
     libraryActions: {
@@ -108,6 +113,7 @@ export function createLibraryActions(deps: LibraryActionsDependencies) {
       SelectLibraryEntry: handleSelectLibraryEntry.bind(undefined, deps),
       LoadLibraryArtwork: handleLoadLibraryArtwork.bind(undefined, deps),
       LoadMoreLibrary: deps.loadMoreLibrary,
+      RevealLibraryLetter: handleRevealLibraryLetter.bind(undefined, deps),
     },
   };
 }

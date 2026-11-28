@@ -1,4 +1,5 @@
 import type { ArtworkReference } from './MemoryArtworkCache';
+import type { CatalogLetterSection } from './catalogBrowseQueries';
 import type { DacMode } from './dacMode';
 import type { LibrarySortingSnapshot, Playlist } from './remoteDtos';
 
@@ -140,6 +141,8 @@ export interface RemoteUiState {
   queueLoadingMore: boolean;
   libraryEntries: LibraryEntry[];
   libraryStatus: ContentStatus;
+  /** Letter sections of the player's whole song list; empty when it is not stored locally. */
+  libraryLetters: CatalogLetterSection[];
   queueStatus: ContentStatus;
   libraryQuery: string;
   libraryCountLabel?: string | null;

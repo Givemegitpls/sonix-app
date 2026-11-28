@@ -108,6 +108,10 @@ export class SyncedCatalogStore {
     return this.browse.songPage(...args);
   }
 
+  songLetterSections(...args: Parameters<CatalogBrowseQueries['songLetterSections']>) {
+    return this.browse.songLetterSections(...args);
+  }
+
   groups(...args: Parameters<CatalogBrowseQueries['groups']>) {
     return this.browse.groups(...args);
   }

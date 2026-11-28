@@ -3,7 +3,7 @@ import { CatalogGroup, CatalogGroupKind, CatalogIdentity, SyncedCatalogStore } f
 import { CatalogSong, LibraryCategory, LibraryEntry, LibraryGroup, LibrarySortingSnapshot, Song } from '../data/types';
 import { GroupKind, LibraryContext, LibraryEntryFactory } from './LibraryEntryFactory';
 import { ExtensionPage, LibraryList } from './LibraryListCache';
-import { sortedByTitle } from './titleOrder';
+import { sortedByTitle } from '../core/titleOrder';
 import { isServerOrderedAlbumSort } from './librarySorting';
 import { albumGroupFilter, orderedAlbumList, readOrderedAlbumPage } from './orderedAlbumPaging';
 import { favoritesLabels } from '../ui/library/libraryCategories';

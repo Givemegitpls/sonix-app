@@ -13,6 +13,7 @@ import { LibraryPlaceholderProps } from '../components/LibraryPlaceholder';
 import { PageTransition } from '../components/PageTransition';
 import { Space } from '../tokens';
 import { letterOfEntry, railLetters } from '../library/alphabetIndex';
+import type { RailLetter } from '../library/alphabetIndex';
 import { FlipContext } from '../library/flipRegistry';
 import { categoryNoun, favoritesLabels, isSortableCategory } from '../library/libraryCategories';
 import { entryItems, withLetterHeaders } from '../library/libraryItems';
@@ -26,6 +27,7 @@ import { BulkActionsSheet } from '../sheets/BulkActionsSheet';
 import {
   useLibrarySetup, useLibraryNavigation, useLibrarySelectionLifetime, type LibrarySetup, type LibraryNavigation,
 } from './useLibraryScreenNavigation';
+import { useLetterJump } from './useLetterJump';
 import { libraryRootHeader, libraryCollectionHeader, libraryListToolbar, NESTED_ALBUMS_TITLE } from './libraryHeaders';
 
 export interface LibraryScreenProps {
@@ -39,7 +41,7 @@ const ROOT_STICKY_HEADER_INDICES = [1];
 const RAIL_GUTTER = 32;
 const RAIL_ENTRY_INSET = RAIL_GUTTER - Space.xs;
 const RAIL_TOP = 176;
-const STICKY_CHIPS_OFFSET = 64;
+const NO_LETTERS: RemoteUiState['libraryLetters'] = [];
 
 function emptyMessage(category: LibraryCategory, nested: boolean, supportedFeatures: string[]): LibraryPlaceholderProps {
   if (category === LibraryCategory.Folders) return { title: 'This folder is empty' };
@@ -60,7 +62,8 @@ export function LibraryScreen({ state, onAction, category, contentBottomInset = 
   const navigation = useLibraryNavigation(setup, onAction);
   const projection = useLibraryProjection(state, category, setup);
   const list = useLibraryItems({ state, onAction, category }, setup, navigation, projection);
-  return renderLibraryScreen({ state, onAction, contentBottomInset }, setup, navigation, list);
+  const selectLetter = useLetterJump(list.letters, setup.scroll, setup.scroll.scrollToTop, onAction);
+  return renderLibraryScreen({ state, onAction, contentBottomInset }, setup, navigation, list, selectLetter);
 }
 
 function useLibraryProjection(state: RemoteUiState, category: LibraryCategory, setup: LibrarySetup) {
@@ -103,10 +106,12 @@ function useLibraryProjection(state: RemoteUiState, category: LibraryCategory, s
     return lettered ? withLetterHeaders(entryRows, letterOfEntry) : entryRows;
   }, [searchActive, showGrid, tiles, entries, category, nested, nestedTitle, albumDetail, lettered]);
   const rowLetters = useMemo(() => (lettered ? railLetters(rows) : []), [lettered, rows]);
+  const catalogLetters = lettered ? state.libraryLetters : NO_LETTERS;
 
   return {
     entries, step, artistDetail, albumDetail, albumEntries, nativeCollectionPlayback, nativeRootSongsPlayback,
-    nativeGenrePlayback, gridCapable, showGrid, lettered, nestedTitle, rows, rowLetters, localDirectionSort,
+    nativeGenrePlayback, gridCapable, showGrid, lettered, nestedTitle, rows, rowLetters, catalogLetters,
+    localDirectionSort,
   };
 }
 
@@ -121,7 +126,8 @@ function useLibraryItems(
   const { nested, searchActive, t, insets, chipsHeader, selectedIds, selectionMode, bulkSelection, exitSelection,
     ascending, setAscending, setGrid, setSearchOpen } = setup;
   const { entries, step, artistDetail, albumDetail, albumEntries, nativeCollectionPlayback, nativeRootSongsPlayback,
-    nativeGenrePlayback, gridCapable, showGrid, lettered, nestedTitle, rows, rowLetters, localDirectionSort } = projection;
+    nativeGenrePlayback, gridCapable, showGrid, lettered, nestedTitle, rows, rowLetters, catalogLetters,
+    localDirectionSort } = projection;
   const noun = nested ? (artistDetail ? 'albums' : 'items') : categoryNoun(category, state.supportedFeatures);
   const connected = state.connectionStatus === ConnectionStatus.Connected;
   const shuffleActive = isShuffleMode(state.playbackMode);
@@ -159,7 +165,7 @@ function useLibraryItems(
     showGrid, gridCapable, flip,
   ]);
 
-  return useProjectedItems(headerItems, rows, rowLetters, placeholder);
+  return useProjectedItems(headerItems, rows, rowLetters, catalogLetters, placeholder);
 }
 
 function useLibraryPlaceholder(
@@ -192,13 +198,25 @@ function useProjectedItems(
   headerItems: ReturnType<typeof libraryRootHeader>,
   rows: LibraryProjection['rows'],
   rowLetters: LibraryProjection['rowLetters'],
+  catalogLetters: RemoteUiState['libraryLetters'],
   placeholder: ReturnType<typeof libraryStateMessage>,
 ) {
   const rowsStart = headerItems.length;
-  const letters = useMemo(
-    () => (placeholder ? [] : rowLetters.map((letter) => ({ ...letter, itemIndex: letter.itemIndex + rowsStart }))),
-    [placeholder, rowLetters, rowsStart],
-  );
+  const letters = useMemo<RailLetter[]>(() => {
+    if (placeholder) return [];
+    // With a local catalog the rail covers the whole library; otherwise it can only show loaded sections.
+    if (catalogLetters.length) {
+      const indexByLetter = new Map<string, number>();
+      rows.forEach((item, index) => {
+        if (item.type === 'letter' && !indexByLetter.has(item.letter)) indexByLetter.set(item.letter, index);
+      });
+      return catalogLetters.map(({ letter, position }) => {
+        const rowIndex = indexByLetter.get(letter);
+        return { letter, position, itemIndex: rowIndex == null ? -1 : rowIndex + rowsStart };
+      });
+    }
+    return rowLetters.map((letter) => ({ ...letter, itemIndex: letter.itemIndex + rowsStart }));
+  }, [placeholder, catalogLetters, rows, rowLetters, rowsStart]);
   const listItems = useMemo(
     () => (placeholder ? headerItems : headerItems.concat(rows)),
     [placeholder, headerItems, rows],
@@ -214,12 +232,12 @@ function renderLibraryScreen(
   setup: LibrarySetup,
   navigation: LibraryNavigation,
   list: LibraryItems,
+  selectLetter: (letter: RailLetter) => void,
 ) {
   const { bulkSelection, exitSelection, searchActive, scroll, selectionMode, selectedIds,
     songSwipe, tileWidth, nested } = setup;
   const { openEntry, closeSearch, selectEntry, longPressEntry } = navigation;
   const { letters, listItems } = list;
-  const { scrollToTop } = scroll;
   const page = (content: React.ReactNode, rail?: React.ReactNode) =>
     renderLibraryPage(content, rail, setup, state, onAction);
 
@@ -242,7 +260,7 @@ function renderLibraryScreen(
     );
   }
 
-  const jumpToItem = libraryLetterJump(letters, scroll, scrollToTop);
+  const jumpToItem = selectLetter;
 
   return page(
     <LibraryList
@@ -267,16 +285,6 @@ function renderLibraryScreen(
     />,
     <AlphabetRail letters={letters} top={RAIL_TOP} bottom={contentBottomInset} onSelect={jumpToItem} />,
   );
-}
-
-function libraryLetterJump(
-  letters: LibraryItems['letters'], scroll: LibrarySetup['scroll'], scrollToTop: LibrarySetup['scroll']['scrollToTop'],
-) {
-  // The first letter goes to the very top, so the header (and its selection bar) isn't left under the chips.
-  return (index: number) =>
-    index <= (letters[0]?.itemIndex ?? 0)
-      ? scrollToTop(false)
-      : scroll.listRef.current?.scrollToIndex({ index, animated: false, viewOffset: STICKY_CHIPS_OFFSET });
 }
 
 function renderLibraryPage(

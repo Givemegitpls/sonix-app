@@ -201,8 +201,18 @@ const loadLibraryCategory = async (
     const entries = reconcileEntries(shown, loaded.entries, (fresh, kept) => libraryEntriesRef.current.copyTarget(fresh, kept));
     const list = entries === loaded.entries ? loaded : { ...loaded, entries };
     libraryListCacheRef.current.set(source, cat, list);
+    // Section letters cover the whole song list, so the rail is complete before every page is loaded.
+    const letters = cat === LibraryCategory.Songs && !query && context.catalog
+      ? await context.store.songLetterSections(context.catalog.libraryId, context.catalog.revision)
+      : null;
+    if (loadGeneration !== libraryLoadGenerationRef.current || api !== apiRef.current) return;
     const unchanged = cached && entries === cached.entries && list.label === cached.label && list.hasMore === cached.hasMore;
     if (!unchanged) showLibraryList(deps, key, list);
+    if (letters) {
+      setState((prev) => (prev.libraryLetters === letters ? prev : { ...prev, libraryLetters: letters }));
+    } else if (cat === LibraryCategory.Songs && stateRef.current.libraryLetters.length) {
+      setState((prev) => (prev.libraryLetters.length ? { ...prev, libraryLetters: [] } : prev));
+    }
   } catch (err: any) {
     if (loadGeneration !== libraryLoadGenerationRef.current || api !== apiRef.current) return;
     if ((cat === LibraryCategory.Search && librarySource(deps) !== source) || recoverCatalogBrowse(err, context.catalog)) {

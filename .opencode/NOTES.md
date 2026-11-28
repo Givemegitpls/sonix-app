@@ -139,3 +139,27 @@ player API. The firmware is **not** modified; the server already exists in
 - Store rows at 160 px (`max=160`); the player decodes faster and the photo is
   still sharp at list size. `/api/art` answers 202 until its worker finishes,
   so the wait is 25 × 200 ms rather than 2 s.
+
+## Songs order, volume units, letter rail (2026-11-27)
+
+- `/api/state` reports `volume` as a whole **percent (0–100)**, while the app's
+  `PlaybackStatus.volume` / `normalizedVolume()` contract is a 0–1 fraction.
+  `SonixMapping.statusFromState` now divides by 100; without it the slider always
+  showed 100% and the pending-volume reconciliation never confirmed.
+  A player may cap its maximum volume (the test device caps at 40): commands above
+  the cap are accepted and clamped, so the UI stays at the cap — not a bug.
+- `catalog_songs.catalog_rank` is the `MEDIA_TABLE` rowid, i.e. the scan order
+  (artist folders first), so ordering the flat Songs list by it groups by artist.
+  The list is now ordered by `title_key` — a JS-computed `titleSortKey` stored in
+  the new column from schema v4 (backfilled by the migration, written by
+  `writeSongRows`) and indexed `(library_id, revision, title_key)`.
+- The Songs alphabet rail covers the **whole** song list: `songLetterSections()`
+  walks the catalog in `title_key` order and returns `[{letter, position}]`,
+  loaded into `state.libraryLetters`. `AlphabetRail` shrinks its row height to fit
+  all sections; pressing a not-yet-loaded letter sends `RevealLibraryLetter`,
+  which reads pages up to that position and publishes them in one update, then
+  `useLetterJump` scrolls to the letter's header row.
+- Rail jumps use `scrollToIndex` with a **negative** `viewOffset` (-104): a
+  positive one scrolls the target *past* the sticky chips bar, and FlashList
+  estimates unrendered rows, so the first call after a reveal lands a row off —
+  `useLetterJump` repeats the jump 150 ms later, when the rows are measured.

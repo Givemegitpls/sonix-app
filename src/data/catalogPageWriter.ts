@@ -1,4 +1,5 @@
 import type { SqlConnection } from './catalogDatabase';
+import { titleSortKey } from '../core/titleOrder';
 import { splitGenres } from './splitGenres';
 import type { CatalogCoversPage, CatalogPage } from './types';
 
@@ -27,9 +28,9 @@ async function insertRows(tx: SqlConnection, sql: string, rows: Row[], suffix = 
 export async function writeSongRows(tx: SqlConnection, page: CatalogPage): Promise<void> {
   const { libraryId, revision, songs, offset } = page;
   await insertRows(tx, `INSERT OR REPLACE INTO catalog_songs (
-    library_id, revision, id, title, artist, album, album_artist, genre, track_number, disc_number, catalog_rank, album_key
+    library_id, revision, id, title, title_key, artist, album, album_artist, genre, track_number, disc_number, catalog_rank, album_key
   )`, songs.map((song, index) => [
-    libraryId, revision, song.id, song.title, song.artist, song.album, song.albumArtist, song.genre,
+    libraryId, revision, song.id, song.title, titleSortKey(song.title), song.artist, song.album, song.albumArtist, song.genre,
     song.trackNumber, song.discNumber, offset + index, song.albumKey,
   ]));
 

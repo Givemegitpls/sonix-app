@@ -48,6 +48,7 @@ export type RemoteAction =
   | { type: 'SetVolume'; volume: number }
   | { type: 'SearchLibrary'; query: string }
   | { type: 'LoadMoreLibrary' }
+  | { type: 'RevealLibraryLetter'; position: number }
   | { type: 'LoadMoreQueue' }
   | { type: 'RetryQueueArtwork'; ids: string[] }
   | { type: 'LoadLibraryArtwork'; entryId: string }

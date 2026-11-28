@@ -39,6 +39,7 @@ export function createInitialSessionState(): RemoteUiState {
     queueLoadingMore: false,
     libraryEntries: [],
     libraryStatus: ContentStatus.Ready,
+    libraryLetters: [],
     queueStatus: ContentStatus.Ready,
     libraryQuery: '',
     libraryCountLabel: null,

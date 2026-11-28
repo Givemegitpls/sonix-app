@@ -108,7 +108,8 @@ export function statusFromState(state: SonixState, extras: StatusExtras): Playba
     album: state.album || '',
     positionSeconds: Number(state.position || 0),
     durationSeconds: Number(state.duration || 0),
-    volume: Number(state.volume || 0),
+    // `/api/state` reports whole percent; the app's session layer keeps a 0..1 fraction.
+    volume: Math.max(0, Math.min(100, Number(state.volume) || 0)) / 100,
     playMode: modeNumber(state.mode),
     codec: codecFromPath(state.path) ?? undefined,
     sourceBitDepth: Number(state.bits || 0) || undefined,

@@ -46,14 +46,14 @@ export function useLibraryBrowser({
   const songs = createLibrarySongPage({ shared, t, loadLibraryCategory, loadGroupAlbums, recoverCatalogBrowse });
   const sorting = createLibrarySortingSession({ shared, loadLibraryCategory, loadGroupAlbums });
   const actions = useLazyRef(() => {
-    const { loadMoreLibrary } = createLibraryPaging({
+    const { loadMoreLibrary, revealLibraryLetter } = createLibraryPaging({
       shared, browsePlaylist, libraryLoadContext, librarySource, loadLibraryCategory,
       recoverCatalogBrowse, showLibraryList,
       restartCatalogBrowse: songs.restartCatalogBrowse, startSongPage: songs.startSongPage,
     });
     return {
       ...createLibraryActions({
-        shared, librarySource, loadLibraryArtwork, loadLibraryCategory, loadMoreLibrary,
+        shared, librarySource, loadLibraryArtwork, loadLibraryCategory, loadMoreLibrary, revealLibraryLetter,
         searchReturnCategoryRef, selectLibraryEntry, startCatalogSync, stopSearchReads,
         playNativeCollection: sorting.playNativeCollection, setLibrarySorting: sorting.setLibrarySorting,
       }),

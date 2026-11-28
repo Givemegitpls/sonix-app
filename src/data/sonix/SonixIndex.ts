@@ -446,9 +446,13 @@ export class SonixIndex {
     const total = Number((await this.first<{ total: number }>(
       `SELECT COUNT(*) AS total FROM MEDIA_TABLE WHERE ${clause}`, params
     ))?.total ?? 0);
+    // Album pages read like the record; a flat list reads like the Songs tab, alphabetically.
+    const order = filter.album != null
+      ? 'album COLLATE NOCASE, COALESCE(disc, 1), dis_id, rowid'
+      : 'name COLLATE NOCASE, rowid';
     const rows = await this.query<MediaRow>(
       `SELECT ${this.selectColumns} FROM MEDIA_TABLE WHERE ${clause}
-       ORDER BY album COLLATE NOCASE, COALESCE(disc, 1), dis_id, rowid LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`,
+       ORDER BY ${order} LIMIT ?${params.length + 1} OFFSET ?${params.length + 2}`,
       [...params, limit, offset]
     );
     return { total, songs: rows.map((row) => songFromRow(toSongRow(row))) };

@@ -1,4 +1,5 @@
 import type { SqlConnection, SqlDatabase } from './catalogDatabase';
+import { titleSortKey } from '../core/titleOrder';
 import { writeGenreRows } from './catalogPageWriter';
 
 // Ordered schema steps; index i upgrades user_version i to i + 1. Never edit a shipped step, append a new one.
@@ -85,6 +86,12 @@ const SCHEMA_MIGRATIONS: string[] = [
       WHERE library_id = OLD.library_id AND revision = OLD.revision AND song_id = OLD.id;
     END;
   `,
+  // v4: the Songs list is ordered by title with the player's browse collation, which SQLite
+  // cannot reproduce, so the key is computed in JS and stored next to the row.
+  `
+    ALTER TABLE catalog_songs ADD COLUMN title_key TEXT NOT NULL DEFAULT '';
+    CREATE INDEX IF NOT EXISTS catalog_songs_title_key ON catalog_songs(library_id, revision, title_key);
+  `,
 ];
 
 async function backfillGenres(tx: SqlConnection): Promise<void> {
@@ -102,12 +109,29 @@ async function backfillGenres(tx: SqlConnection): Promise<void> {
   }
 }
 
+async function backfillTitleKeys(tx: SqlConnection): Promise<void> {
+  let afterRowId: number | null = null;
+  for (;;) {
+    const rows: { rowid: number; title: string }[] = await tx.query(
+      `SELECT rowid, title FROM catalog_songs
+       ${afterRowId == null ? '' : 'WHERE rowid > ?'} ORDER BY rowid LIMIT 500`,
+      afterRowId == null ? [] : [afterRowId]
+    );
+    if (!rows.length) return;
+    for (const row of rows) {
+      await tx.run('UPDATE catalog_songs SET title_key = ? WHERE rowid = ?', [titleSortKey(row.title), row.rowid]);
+    }
+    afterRowId = rows[rows.length - 1].rowid;
+  }
+}
+
 export async function migrateCatalog(db: SqlDatabase): Promise<void> {
   await db.transaction(async (tx) => {
     const row = await tx.queryFirst<{ user_version: number }>('PRAGMA user_version');
     for (let version = row?.user_version ?? 0; version < SCHEMA_MIGRATIONS.length; version++) {
       await tx.exec(SCHEMA_MIGRATIONS[version]);
       if (version === 2) await backfillGenres(tx);
+      if (version === 3) await backfillTitleKeys(tx);
       await tx.exec(`PRAGMA user_version = ${version + 1}`);
     }
   });

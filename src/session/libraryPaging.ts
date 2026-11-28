@@ -204,8 +204,75 @@ const loadMoreLibrary = async (deps: LibraryPagingDependencies) => {
   }
 };
 
+/**
+ * Jumps the Songs list to one of the rail's letters: pages are read until the
+ * section is loaded, then published in one update. The UI scrolls once the
+ * letter's first row exists.
+ */
+const revealLibraryLetter = async (deps: LibraryPagingDependencies, position: number) => {
+  const {
+    activeCatalogRef, apiRef, currentLibraryCategoryRef, libraryBrowseCatalogRef, libraryEntriesRef,
+    libraryListCacheRef, libraryLoadGenerationRef, libraryPageLoadingRef, setState, stateRef,
+  } = deps.shared;
+  const { libraryLoadContext, librarySource, recoverCatalogBrowse } = deps;
+  const api = apiRef.current;
+  const state = stateRef.current;
+  if (!api || state.libraryIsNested || state.libraryQuery.trim() ||
+      currentLibraryCategoryRef.current !== LibraryCategory.Songs) return;
+  if (state.libraryEntries.length > position) return;
+  if (libraryPageLoadingRef.current === libraryLoadGenerationRef.current) return;
+  const catalog = libraryBrowseCatalogRef.current ? activeCatalogRef.current : null;
+  if (!catalog) return;
+
+  const generation = libraryLoadGenerationRef.current;
+  const source = librarySource(catalog);
+  const factory = libraryEntriesRef.current;
+  const context = libraryLoadContext(api, catalog, false);
+  libraryPageLoadingRef.current = generation;
+  setState((prev) => ({ ...prev, libraryStatus: ContentStatus.Loading }));
+  try {
+    let entries = state.libraryEntries;
+    let total = 0;
+    // Bounded: the list cannot grow past its total, the cap only guards a server that never settles.
+    for (let read = 0; read < 400; read++) {
+      const page = await loadSongsAfter(context, entries, entries.length, null);
+      total = page.total;
+      if (!page.entries.length) break;
+      entries = factory.append(entries, page.entries);
+      if (entries.length > position || entries.length >= total) break;
+      if (generation !== libraryLoadGenerationRef.current || api !== apiRef.current) return;
+    }
+    if (generation !== libraryLoadGenerationRef.current || api !== apiRef.current) return;
+    libraryListCacheRef.current.set(source, LibraryCategory.Songs, {
+      entries,
+      total,
+      hasMore: entries.length < total,
+      label: entries.length < total ? `Showing ${entries.length} of ${total} tracks` : `${entries.length} tracks`,
+      extensionPage: null,
+    });
+    setState((prev) => ({
+      ...prev,
+      libraryEntries: entries,
+      libraryHasMore: entries.length < total,
+      libraryStatus: entries.length > 0 ? ContentStatus.Ready : ContentStatus.Empty,
+      libraryCountLabel: entries.length < total ? `Showing ${entries.length} of ${total} tracks` : `${entries.length} tracks`,
+    }));
+  } catch (err: any) {
+    if (generation !== libraryLoadGenerationRef.current || api !== apiRef.current) return;
+    if (recoverCatalogBrowse(err, catalog)) return;
+    setState((prev) => ({
+      ...prev,
+      libraryStatus: ContentStatus.Error,
+      connectionMessage: err?.message || 'Could not load more items',
+    }));
+  } finally {
+    if (libraryPageLoadingRef.current === generation) libraryPageLoadingRef.current = null;
+  }
+};
+
 export function createLibraryPaging(deps: LibraryPagingDependencies) {
   return {
     loadMoreLibrary: loadMoreLibrary.bind(undefined, deps),
+    revealLibraryLetter: revealLibraryLetter.bind(undefined, deps),
   };
 }
